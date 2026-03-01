@@ -257,13 +257,21 @@
     scene.background = new THREE.Color(0x83c8f2);
     scene.fog = new THREE.Fog(0x83c8f2, 1800, 42000);
 
-    const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 90000);
+    const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 1, 70000);
     camera.position.set(0, 35, 120);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: false,
+      preserveDrawingBuffer: true,
+      premultipliedAlpha: false,
+      powerPreference: 'high-performance',
+      logarithmicDepthBuffer: true
+    });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.setClearColor(0x83c8f2, 1);
     renderer.shadowMap.enabled = false;
     if (gameRootEl) gameRootEl.appendChild(renderer.domElement);
 
@@ -407,12 +415,13 @@
       new THREE.MeshLambertMaterial({ color: 0x4f9f5b })
     );
     ground.rotation.x = -Math.PI / 2;
-    ground.position.y = 0;
+    ground.position.y = -1.2;
     scene.add(ground);
 
     const grid = new THREE.GridHelper(20000, 220, 0x365f3f, 0x365f3f);
     grid.material.opacity = 0.25;
     grid.material.transparent = true;
+    grid.position.y = -0.75;
     scene.add(grid);
 
     // Airport runway at scene origin (y = 0)
@@ -423,10 +432,15 @@
     const runwayEdgeLineOffset = runwayHalfW - 28;
     const runway = new THREE.Mesh(
       new THREE.PlaneGeometry(runwayWidth, runwayLength),
-      new THREE.MeshLambertMaterial({ color: 0x2a2a2a })
+      new THREE.MeshLambertMaterial({
+        color: 0x2a2a2a,
+        polygonOffset: true,
+        polygonOffsetFactor: 1,
+        polygonOffsetUnits: 1
+      })
     );
     runway.rotation.x = -Math.PI / 2;
-    runway.position.set(0, 0.03, 0);
+    runway.position.set(0, 0.08, 0);
     scene.add(runway);
 
     const dashGroup = new THREE.Group();
@@ -436,18 +450,32 @@
     for (let i = 0; i < dashCount; i++) {
       const dash = new THREE.Mesh(
         new THREE.PlaneGeometry(18, dashLen),
-        new THREE.MeshLambertMaterial({ color: 0xffffff })
+        new THREE.MeshLambertMaterial({
+          color: 0xffffff,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -2,
+          polygonOffsetUnits: -2
+        })
       );
       dash.rotation.x = -Math.PI / 2;
-      dash.position.set(0, 0.04, runwayLength * 0.46 - i * dashGap);
+      dash.position.set(0, 0.12, runwayLength * 0.46 - i * dashGap);
+      dash.renderOrder = 12;
       dashGroup.add(dash);
     }
     scene.add(dashGroup);
 
-    const edgeLineMat = new THREE.MeshLambertMaterial({ color: 0xf2c745 });
+    const edgeLineMat = new THREE.MeshLambertMaterial({
+      color: 0xf2c745,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2
+    });
     const edgeLineLeft = new THREE.Mesh(new THREE.PlaneGeometry(10, runwayLength * 0.96), edgeLineMat);
     edgeLineLeft.rotation.x = -Math.PI / 2;
-    edgeLineLeft.position.set(-runwayEdgeLineOffset, 0.04, 0);
+    edgeLineLeft.position.set(-runwayEdgeLineOffset, 0.12, 0);
+    edgeLineLeft.renderOrder = 12;
     scene.add(edgeLineLeft);
     const edgeLineRight = edgeLineLeft.clone();
     edgeLineRight.position.x = runwayEdgeLineOffset;
@@ -487,6 +515,7 @@
     }
     houses.instanceMatrix.needsUpdate = true;
     if (houses.instanceColor) houses.instanceColor.needsUpdate = true;
+    houses.frustumCulled = false;
     scene.add(houses);
 
     // Cars: static + moving
@@ -540,6 +569,8 @@
     }
     poles.instanceMatrix.needsUpdate = true;
     bulbs.instanceMatrix.needsUpdate = true;
+    poles.frustumCulled = false;
+    bulbs.frustumCulled = false;
     scene.add(poles);
     scene.add(bulbs);
 
@@ -556,6 +587,7 @@
       clouds.setMatrixAt(i, instanceDummy.matrix);
     }
     clouds.instanceMatrix.needsUpdate = true;
+    clouds.frustumCulled = false;
     scene.add(clouds);
 
     // Control state
@@ -564,17 +596,30 @@
     let roll = 0;
     let yaw = 0;
     let targetThrottle = 0;
+    let throttleInput = 0;
     let joyX = 0;
     let joyY = 0;
+    let joyTargetX = 0;
+    let joyTargetY = 0;
     let joyActive = false;
     let thrActive = false;
+    let joyPointerId = null;
+    let throttlePointerId = null;
+    let crossedTakeoffAltitude = false;
 
     // Audio (Web Audio API: stable, no CDN dependency)
     let audioCtx = null;
     let masterGain = null;
-    let engineOsc = null;
+    let engineOscLow = null;
+    let engineOscHigh = null;
+    let engineLowGain = null;
+    let engineHighGain = null;
+    let engineLfo = null;
+    let engineLfoGain = null;
     let windNoise = null;
     let windFilter = null;
+    let windGain = null;
+    let audioReady = false;
 
     function createNoiseBuffer(context) {
       const length = context.sampleRate * 2;
@@ -591,13 +636,32 @@
       masterGain.gain.value = 0.0;
       masterGain.connect(audioCtx.destination);
 
-      engineOsc = audioCtx.createOscillator();
-      const engineTone = audioCtx.createGain();
-      engineTone.gain.value = 0.08;
-      engineOsc.type = 'sawtooth';
-      engineOsc.frequency.value = 90;
-      engineOsc.connect(engineTone).connect(masterGain);
-      engineOsc.start();
+      engineOscLow = audioCtx.createOscillator();
+      engineOscLow.type = 'sawtooth';
+      engineOscLow.frequency.value = 72;
+      engineLowGain = audioCtx.createGain();
+      engineLowGain.gain.value = 0.06;
+      engineOscLow.connect(engineLowGain).connect(masterGain);
+      engineOscLow.start();
+
+      engineOscHigh = audioCtx.createOscillator();
+      engineOscHigh.type = 'triangle';
+      engineOscHigh.frequency.value = 145;
+      engineHighGain = audioCtx.createGain();
+      engineHighGain.gain.value = 0.02;
+      engineOscHigh.connect(engineHighGain).connect(masterGain);
+      engineOscHigh.start();
+
+      // Gentle wobble for richer engine rumble
+      engineLfo = audioCtx.createOscillator();
+      engineLfo.type = 'sine';
+      engineLfo.frequency.value = 5.2;
+      engineLfoGain = audioCtx.createGain();
+      engineLfoGain.gain.value = 3.8;
+      engineLfo.connect(engineLfoGain);
+      engineLfoGain.connect(engineOscLow.frequency);
+      engineLfoGain.connect(engineOscHigh.frequency);
+      engineLfo.start();
 
       windNoise = audioCtx.createBufferSource();
       windNoise.buffer = createNoiseBuffer(audioCtx);
@@ -605,11 +669,12 @@
       windFilter = audioCtx.createBiquadFilter();
       windFilter.type = 'highpass';
       windFilter.frequency.value = 200;
-      const windGain = audioCtx.createGain();
+      windGain = audioCtx.createGain();
       windGain.gain.value = 0.02;
       windNoise.connect(windFilter).connect(windGain).connect(masterGain);
       windNoise.start();
 
+      audioReady = true;
       log('Audio initialized');
     }
 
@@ -632,11 +697,16 @@
     }
 
     function updateAudio() {
-      if (!audioCtx || !engineOsc || !masterGain) return;
+      if (!audioCtx || !audioReady || !masterGain) return;
       const t = audioCtx.currentTime;
       const normalizedSpeed = Math.max(0, Math.min(1, speed / 4));
-      engineOsc.frequency.setTargetAtTime(85 + normalizedSpeed * 230 + targetThrottle * 60, t, 0.08);
+      const throttleRatio = Math.max(0, Math.min(1, targetThrottle / 4));
+      engineOscLow.frequency.setTargetAtTime(70 + throttleRatio * 76 + normalizedSpeed * 58, t, 0.09);
+      engineOscHigh.frequency.setTargetAtTime(120 + throttleRatio * 145 + normalizedSpeed * 95, t, 0.08);
+      engineLowGain.gain.setTargetAtTime(0.03 + throttleRatio * 0.1, t, 0.1);
+      engineHighGain.gain.setTargetAtTime(0.01 + throttleRatio * 0.06 + normalizedSpeed * 0.03, t, 0.08);
       windFilter.frequency.setTargetAtTime(220 + normalizedSpeed * 900, t, 0.12);
+      windGain.gain.setTargetAtTime(0.012 + normalizedSpeed * 0.12, t, 0.12);
       masterGain.gain.setTargetAtTime(gameStarted ? 0.35 : 0.0, t, 0.2);
     }
 
@@ -662,15 +732,16 @@
         dy = (dy / dist) * max;
       }
 
-      joyX = dx / max;
-      joyY = dy / max;
+      joyTargetX = dx / max;
+      joyTargetY = dy / max;
       stick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
     }
 
     function resetJoy() {
       joyActive = false;
-      joyX = 0;
-      joyY = 0;
+      joyTargetX = 0;
+      joyTargetY = 0;
+      joyPointerId = null;
       stick.style.transform = 'translate(-50%, -50%)';
     }
 
@@ -683,39 +754,59 @@
       const percentage = 1 - (localY - 25) / (rect.height - 50);
       const usableTrack = rect.height - throttleKnob.getBoundingClientRect().height - 20;
       throttleKnob.style.bottom = `${10 + percentage * usableTrack}px`;
-      targetThrottle = percentage * 4;
+      throttleInput = percentage * 4;
+    }
+
+    function syncThrottleKnob() {
+      if (thrActive) return;
+      const rect = throttle.getBoundingClientRect();
+      const percentage = Math.max(0, Math.min(1, throttleInput / 4));
+      const usableTrack = rect.height - throttleKnob.getBoundingClientRect().height - 20;
+      throttleKnob.style.bottom = `${10 + percentage * usableTrack}px`;
     }
 
     function bindMobileControls() {
       joy.addEventListener('pointerdown', (e) => {
+        if (joyPointerId !== null && joyPointerId !== e.pointerId) return;
+        joyPointerId = e.pointerId;
         joyActive = true;
         joy.setPointerCapture(e.pointerId);
         handleJoy(e);
       }, { passive: false });
 
       joy.addEventListener('pointermove', (e) => {
-        if (joyActive) handleJoy(e);
+        if (joyActive && joyPointerId === e.pointerId) handleJoy(e);
       }, { passive: false });
 
-      joy.addEventListener('pointerup', resetJoy, { passive: true });
-      joy.addEventListener('pointercancel', resetJoy, { passive: true });
+      joy.addEventListener('pointerup', (e) => {
+        if (joyPointerId === e.pointerId) resetJoy();
+      }, { passive: true });
+      joy.addEventListener('pointercancel', (e) => {
+        if (joyPointerId === e.pointerId) resetJoy();
+      }, { passive: true });
 
       throttle.addEventListener('pointerdown', (e) => {
+        if (throttlePointerId !== null && throttlePointerId !== e.pointerId) return;
+        throttlePointerId = e.pointerId;
         thrActive = true;
         throttle.setPointerCapture(e.pointerId);
         handleThrottle(e);
       }, { passive: false });
 
       throttle.addEventListener('pointermove', (e) => {
-        if (thrActive) handleThrottle(e);
+        if (thrActive && throttlePointerId === e.pointerId) handleThrottle(e);
       }, { passive: false });
 
-      throttle.addEventListener('pointerup', () => {
+      throttle.addEventListener('pointerup', (e) => {
+        if (throttlePointerId !== e.pointerId) return;
         thrActive = false;
+        throttlePointerId = null;
       }, { passive: true });
 
-      throttle.addEventListener('pointercancel', () => {
+      throttle.addEventListener('pointercancel', (e) => {
+        if (throttlePointerId !== e.pointerId) return;
         thrActive = false;
+        throttlePointerId = null;
       }, { passive: true });
     }
 
@@ -794,14 +885,14 @@
     window.addEventListener('keyup', (e) => keys.delete(e.code));
 
     function applyKeyboardFallback(dt) {
-      if (keys.has('ArrowUp')) joyY = Math.max(-1, joyY - dt * 4);
-      if (keys.has('ArrowDown')) joyY = Math.min(1, joyY + dt * 4);
-      if (keys.has('ArrowLeft')) joyX = Math.max(-1, joyX - dt * 4);
-      if (keys.has('ArrowRight')) joyX = Math.min(1, joyX + dt * 4);
-      if (keys.has('KeyW')) targetThrottle = Math.min(4, targetThrottle + dt * 2.2);
-      if (keys.has('KeyS')) targetThrottle = Math.max(0, targetThrottle - dt * 2.2);
-      if (!joyActive && !keys.has('ArrowUp') && !keys.has('ArrowDown')) joyY *= 0.86;
-      if (!joyActive && !keys.has('ArrowLeft') && !keys.has('ArrowRight')) joyX *= 0.86;
+      if (keys.has('ArrowUp')) joyTargetY = Math.max(-1, joyTargetY - dt * 4);
+      if (keys.has('ArrowDown')) joyTargetY = Math.min(1, joyTargetY + dt * 4);
+      if (keys.has('ArrowLeft')) joyTargetX = Math.max(-1, joyTargetX - dt * 4);
+      if (keys.has('ArrowRight')) joyTargetX = Math.min(1, joyTargetX + dt * 4);
+      if (keys.has('KeyW')) throttleInput = Math.min(4, throttleInput + dt * 2.2);
+      if (keys.has('KeyS')) throttleInput = Math.max(0, throttleInput - dt * 2.2);
+      if (!joyActive && !keys.has('ArrowUp') && !keys.has('ArrowDown')) joyTargetY *= 0.86;
+      if (!joyActive && !keys.has('ArrowLeft') && !keys.has('ArrowRight')) joyTargetX *= 0.86;
     }
 
     function isOverRunway(x, z) {
@@ -810,6 +901,10 @@
 
     function update(dt) {
       applyKeyboardFallback(dt);
+      joyX += (joyTargetX - joyX) * Math.min(1, dt * 14);
+      joyY += (joyTargetY - joyY) * Math.min(1, dt * 14);
+      targetThrottle += (throttleInput - targetThrottle) * Math.min(1, dt * 8);
+      syncThrottleKnob();
 
       for (let i = 0; i < cars.length; i++) {
         const carState = cars[i];
@@ -860,7 +955,7 @@
 
         if (nearGround) {
           if (onRunway) {
-            const requestingPower = keys.has('KeyW') || thrActive || targetThrottle > 1.0;
+            const requestingPower = keys.has('KeyW') || thrActive || throttleInput > 1.0;
             const takeoffRun = requestingPower;
             if (takeoffRun) {
               speed *= 1 - Math.min(0.08, dt * 0.1);
@@ -871,7 +966,7 @@
               }
             } else {
               speed = THREE.MathUtils.lerp(speed, 0, Math.min(1, dt * 3.8));
-              if (targetThrottle > 0.4) targetThrottle = Math.max(0.4, targetThrottle - dt * 2.6);
+              if (throttleInput > 0.4) throttleInput = Math.max(0.4, throttleInput - dt * 2.6);
               landingState = '跑道滑跑减速';
             }
             pitch *= 0.9;
@@ -891,6 +986,10 @@
         if (landStatusEl) landStatusEl.textContent = `状态: ${landingState}`;
 
         if (!takeoffPlayed && speed > 1.2 && planeGroup.position.y > 30) {
+          playTakeoffSound();
+          crossedTakeoffAltitude = true;
+        } else if (!crossedTakeoffAltitude && planeGroup.position.y > 30) {
+          crossedTakeoffAltitude = true;
           playTakeoffSound();
         }
 
@@ -918,6 +1017,7 @@
 
     let lastTs = performance.now();
     let debugAccumulator = 0;
+    let rafId = 0;
     function frame(ts) {
       const dt = Math.min((ts - lastTs) / 1000, 0.05);
       lastTs = ts;
@@ -938,7 +1038,7 @@
         });
       }
 
-      requestAnimationFrame(frame);
+      rafId = requestAnimationFrame(frame);
     }
 
     window.advanceTime = (ms) => {
@@ -965,11 +1065,23 @@
         control: {
           speed: Number(speed.toFixed(2)),
           throttle: Number(targetThrottle.toFixed(2)),
+          throttleInput: Number(throttleInput.toFixed(2)),
           joyX: Number(joyX.toFixed(2)),
-          joyY: Number(joyY.toFixed(2))
+          joyY: Number(joyY.toFixed(2)),
+          joyTargetX: Number(joyTargetX.toFixed(2)),
+          joyTargetY: Number(joyTargetY.toFixed(2))
         },
         landingState,
-        onRunway: isOverRunway(planeGroup.position.x, planeGroup.position.z)
+        onRunway: isOverRunway(planeGroup.position.x, planeGroup.position.z),
+        audio: {
+          ready: audioReady,
+          contextState: audioCtx ? audioCtx.state : 'none',
+          takeoffPlayed,
+          engineLowHz: engineOscLow ? Number(engineOscLow.frequency.value.toFixed(2)) : 0,
+          engineHighHz: engineOscHigh ? Number(engineOscHigh.frequency.value.toFixed(2)) : 0,
+          windHz: windFilter ? Number(windFilter.frequency.value.toFixed(2)) : 0,
+          windGain: windGain ? Number(windGain.gain.value.toFixed(4)) : 0
+        }
       };
       return JSON.stringify(payload);
     };
@@ -988,7 +1100,13 @@
       lights: 3
     });
 
-    requestAnimationFrame(frame);
+    window.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        lastTs = performance.now();
+      }
+    });
+
+    rafId = requestAnimationFrame(frame);
   </script>
 </body>
 </html>

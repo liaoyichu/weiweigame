@@ -81,3 +81,46 @@ Original prompt: 你是一个专业的 Web 游戏开发者。我们需要为 6 �
 
 ### TODO / Next
 - 若要让 `develop-web-game` 客户端截图不再黑屏，可在其脚本中优先使用 `page.screenshot`（或为 WebGL 画布启用更稳妥捕获路径），当前游戏逻辑本身已通过手工 Playwright 截图验证可见。
+
+## 2026-03-01 (commit 后继续完善：音效 + 移动端触控)
+- 已按用户要求先完成全量提交：`0c36a7a`（包含 index.html、REQUIREMENTS.md、progress.md 及当前工作区其他文件）。
+
+### 音效系统加强（Web Audio API）
+- 引擎轰鸣从单振荡器升级为分层引擎：
+  - 低频层 `engineOscLow`（sawtooth）
+  - 高频层 `engineOscHigh`（triangle）
+  - 低频 LFO 轻微调制（模拟发动机抖动感）
+- 风声系统完善：
+  - 保留噪声源 + 高通滤波
+  - 新增 `windGain` 全局节点，音量随速度连续变化
+- 更新联动逻辑：
+  - `updateAudio()` 根据 `targetThrottle` + `speed` 同步更新引擎频率、双层增益、风噪频率和风噪增益
+- 起飞提示音：
+  - 继续保留起飞音效 `playTakeoffSound()`，在起飞状态过渡时触发
+
+### 移动端触控流畅度优化
+- 输入平滑：
+  - 摇杆引入目标值 `joyTargetX/joyTargetY`，实际 `joyX/joyY` 在 update 中插值跟随，降低抖动
+  - 油门引入 `throttleInput`，实际 `targetThrottle` 插值跟随，拖拽更顺滑
+- 指针锁定：
+  - 为摇杆和油门分别增加 `pointerId` 绑定，避免多指串扰
+- UI 同步：
+  - 键盘/脚本调油门时，`#throttle-knob` 视觉位置自动同步
+
+### 状态输出增强（便于测试）
+- `render_game_to_text` 增补：
+  - 控制层：`throttleInput`, `joyTargetX`, `joyTargetY`
+  - 音频层：`audio.ready`, `contextState`, `takeoffPlayed`, `engineLowHz`, `engineHighHz`, `windHz`, `windGain`
+
+### 本轮测试验证
+- 语法：提取内联脚本后 `node --check` 通过。
+- develop-web-game 客户端：命令执行通过，`output/web-game/state-*.json` 正常更新。
+- 音效联动测试（Playwright + SwiftShader）：
+  - 起飞前：`engineLowHz ~70`, `engineHighHz ~120`, `windGain ~0.0128`
+  - 加速飞行后：`engineLowHz ~203.79`, `engineHighHz ~359.66`, `windGain ~0.1315`
+  - `audioReady=true`, `contextState=running`, `takeoffPlayed=true`
+  - 产物：`output/audio-check.png`
+- 移动端触控测试（iPhone 12 仿真 + pointer 拖拽）：
+  - 摇杆/油门样本序列呈平滑渐变（非突跳）
+  - 释放后摇杆归中，油门维持当前输入（符合该游戏控制设计）
+  - 产物：`output/mobile-touch-check.png`

@@ -1,0 +1,16 @@
+{
+  "desktopErrors": [],
+  "mobileErrors": [],
+  "desktopState": {
+    "started": true,
+    "y": 1.2,
+    "speed": 0,
+    "landingState": "跑道滑跑减速"
+  },
+  "mobileState": {
+    "started": true,
+    "y": 1.2,
+    "speed": 0,
+    "landingState": "跑道滑跑减速"
+  }
+}

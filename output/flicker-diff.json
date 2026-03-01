@@ -1,0 +1,14 @@
+{
+  "desktop": {
+    "count": 10,
+    "diff_avg": 14.860551,
+    "diff_max": 40.576877,
+    "diff_min": 2.968164
+  },
+  "mobile": {
+    "count": 10,
+    "diff_avg": 22.557573,
+    "diff_max": 43.957676,
+    "diff_min": 2.924048
+  }
+}

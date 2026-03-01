@@ -124,3 +124,53 @@ Original prompt: 你是一个专业的 Web 游戏开发者。我们需要为 6 �
   - 摇杆/油门样本序列呈平滑渐变（非突跳）
   - 释放后摇杆归中，油门维持当前输入（符合该游戏控制设计）
   - 产物：`output/mobile-touch-check.png`
+
+## 2026-03-01 (闪烁问题专项修复)
+- 用户反馈游戏画面闪烁，按 4 类常见原因逐项排查并修复：
+  1. Renderer 配置：
+     - `WebGLRenderer` 明确设置 `alpha: false`、`preserveDrawingBuffer: true`、`premultipliedAlpha: false`、`logarithmicDepthBuffer: true`。
+     - 显式 `setClearColor(0x83c8f2, 1)`，避免背景透明/清屏不一致导致闪帧感。
+  2. 渲染循环同步：
+     - 保持单一 `requestAnimationFrame` 主循环，增加 `rafId` 管理。
+     - 页面从后台恢复时重置 `lastTs`（`visibilitychange`），避免大时间步引发视觉跳变。
+  3. Z-fighting（深度冲突）：
+     - 地面下移到 `y=-1.2`，网格下移到 `y=-0.75`。
+     - 跑道抬升到 `y=0.08` 并启用 `polygonOffset`。
+     - 跑道白虚线/黄边线抬升到 `y=0.12`，设置 `depthWrite:false + polygonOffset + renderOrder`，避免与跑道面冲突闪烁。
+     - 相机裁剪面优化：`near: 1`、`far: 70000`，提升深度精度。
+  4. InstancedMesh / 渲染顺序：
+     - 对 `houses/poles/bulbs/clouds` 设 `frustumCulled = false`，避免实例大范围场景中边界剔除抖动。
+
+- 已先提交修复 commit：`63e7b0d`（满足“修完先 commit”要求）。
+
+### 修复后测试
+- `develop-web-game` 客户端回归执行通过（无运行报错）。
+- 桌面与移动端（iPhone 12 仿真）连续 10 帧截图对比：
+  - 产物：`output/flicker-desktop-*.png`、`output/flicker-mobile-*.png`、`output/flicker-meta.json`、`output/flicker-diff.json`
+  - 控制台/页面错误：`desktopErrors=[]`、`mobileErrors=[]`
+  - 视觉检查：跑道/地面/标线无明显深度冲突闪烁，画面稳定。
+
+## 2026-03-01 (An-225 模型升级)
+- 先尝试在线免费模型路径：
+  - 从公开页面解析到可直连 GLB：`https://s3-eu-west-1.amazonaws.com/fetchcfd/original/file-1755720206320.glb`
+  - 在代码中加入 `GLTFLoader`，实现“外部模型优先加载”。
+- 增加兜底机制：
+  - 若外部 GLB 因网络/兼容问题加载失败，自动回退到高精度程序化 An-225，不影响可玩性。
+
+### 程序化 An-225 细化项
+- 机身改为 Lathe 流线体（非简单圆柱），并加机头鼓包与背部驼峰。
+- 高置机翼改为分段建模，带下反角趋势。
+- 双垂直尾翼 + 尾平面重做。
+- 六台发动机吊舱（3x2）加入挂架、进气口与风扇盘。
+- 起落架细化：前起落架 + 多组主起落架轮组。
+- 机窗细节新增。
+- 涂装维持白色机身 + 蓝黄条纹。
+
+### 验证
+- 语法检查：`node --check` 通过。
+- `develop-web-game` 客户端回归执行通过。
+- Playwright 截图与状态验证：
+  - `output/model-before-start.png`
+  - `output/model-after-start.png`
+  - `output/model-flight.png`
+  - `output/model-state.json`（`modelSource: procedural`，飞行状态正常，错误数 0）

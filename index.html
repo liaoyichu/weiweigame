@@ -202,6 +202,7 @@
     }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 <body>
   <div id="game-root"></div>
@@ -287,124 +288,258 @@
     fill.position.set(-180, 120, -160);
     scene.add(fill);
 
-    // Plane model (procedural, reliable)
+    // Plane model: prefer external free GLB, fallback to detailed procedural An-225
     const planeGroup = new THREE.Group();
+    const planeVisual = new THREE.Group();
+    planeGroup.add(planeVisual);
+    let propRoot = null;
+    let planeModelSource = 'procedural';
 
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xf8fbff, roughness: 0.5, metalness: 0.15 });
-    const blueAccentMat = new THREE.MeshStandardMaterial({ color: 0x2c74b5, roughness: 0.4, metalness: 0.12 });
-    const yellowAccentMat = new THREE.MeshStandardMaterial({ color: 0xf2c433, roughness: 0.45, metalness: 0.08 });
-    const engineMat = new THREE.MeshStandardMaterial({ color: 0xd5deea, roughness: 0.42, metalness: 0.2 });
-    const intakeMat = new THREE.MeshStandardMaterial({ color: 0x213446, roughness: 0.55, metalness: 0.1 });
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xf8fbff, roughness: 0.46, metalness: 0.12 });
+    const blueAccentMat = new THREE.MeshStandardMaterial({ color: 0x2f73b7, roughness: 0.4, metalness: 0.11 });
+    const yellowAccentMat = new THREE.MeshStandardMaterial({ color: 0xf2c53d, roughness: 0.42, metalness: 0.08 });
+    const engineMat = new THREE.MeshStandardMaterial({ color: 0xd4dce8, roughness: 0.36, metalness: 0.2 });
+    const intakeMat = new THREE.MeshStandardMaterial({ color: 0x203348, roughness: 0.55, metalness: 0.1 });
+    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1a1d22, roughness: 0.86, metalness: 0.02 });
+    const strutMat = new THREE.MeshStandardMaterial({ color: 0xa6afbd, roughness: 0.35, metalness: 0.45 });
+    const windowMat = new THREE.MeshStandardMaterial({ color: 0x7fb4de, roughness: 0.2, metalness: 0.5 });
 
-    // An-225 style: larger fuselage
-    const bodyGeo = new THREE.CylinderGeometry(2.2, 2.2, 24, 28);
-    bodyGeo.rotateX(Math.PI / 2);
-    planeGroup.add(new THREE.Mesh(bodyGeo, bodyMat));
-
-    const noseGeo = new THREE.ConeGeometry(2.15, 5.2, 28);
-    noseGeo.rotateX(Math.PI / 2);
-    noseGeo.translate(0, 0, -14.6);
-    planeGroup.add(new THREE.Mesh(noseGeo, bodyMat));
-
-    const tailConeGeo = new THREE.ConeGeometry(1.7, 4.2, 24);
-    tailConeGeo.rotateX(-Math.PI / 2);
-    tailConeGeo.translate(0, 0, 14.1);
-    planeGroup.add(new THREE.Mesh(tailConeGeo, bodyMat));
-
-    // Distinctive upper hump near cockpit (r128-safe: no CapsuleGeometry)
-    const humpBodyGeo = new THREE.CylinderGeometry(1.1, 1.0, 4.8, 20);
-    humpBodyGeo.rotateX(Math.PI / 2);
-    humpBodyGeo.translate(0, 1.55, -8.3);
-    planeGroup.add(new THREE.Mesh(humpBodyGeo, bodyMat));
-    const humpFrontGeo = new THREE.SphereGeometry(1.08, 18, 16);
-    humpFrontGeo.scale(1, 0.92, 0.8);
-    humpFrontGeo.translate(0, 1.55, -10.75);
-    planeGroup.add(new THREE.Mesh(humpFrontGeo, bodyMat));
-    const humpRearGeo = new THREE.SphereGeometry(1.02, 18, 16);
-    humpRearGeo.scale(1, 0.9, 0.75);
-    humpRearGeo.translate(0, 1.55, -5.9);
-    planeGroup.add(new THREE.Mesh(humpRearGeo, bodyMat));
-
-    const cockpitGeo = new THREE.SphereGeometry(1.45, 20, 20);
-    cockpitGeo.scale(1, 0.58, 1.35);
-    cockpitGeo.translate(0, 1.95, -11.1);
-    planeGroup.add(new THREE.Mesh(cockpitGeo, new THREE.MeshStandardMaterial({ color: 0x7aaed6, roughness: 0.22, metalness: 0.45 })));
-
-    // High-mounted main wing
-    const wingGeo = new THREE.BoxGeometry(28, 0.45, 4.6);
-    wingGeo.translate(0, 1.45, -1.2);
-    planeGroup.add(new THREE.Mesh(wingGeo, bodyMat));
-
-    // Horizontal tail
-    const tailWingGeo = new THREE.BoxGeometry(10.8, 0.34, 2.9);
-    tailWingGeo.translate(0, 2.2, 10.6);
-    planeGroup.add(new THREE.Mesh(tailWingGeo, bodyMat));
-
-    // Twin vertical stabilizers
-    const finGeo = new THREE.BoxGeometry(0.36, 4.1, 2.6);
-    const finLeft = new THREE.Mesh(finGeo, blueAccentMat);
-    finLeft.position.set(-4.2, 4.25, 11.4);
-    planeGroup.add(finLeft);
-    const finRight = finLeft.clone();
-    finRight.position.x = 4.2;
-    planeGroup.add(finRight);
-
-    // Accent stripes (blue + yellow)
-    const stripeBlueGeo = new THREE.BoxGeometry(0.16, 0.2, 18.6);
-    const stripeBlueLeft = new THREE.Mesh(stripeBlueGeo, blueAccentMat);
-    stripeBlueLeft.position.set(-1.8, 0.95, -2.5);
-    planeGroup.add(stripeBlueLeft);
-    const stripeBlueRight = stripeBlueLeft.clone();
-    stripeBlueRight.position.x = 1.8;
-    planeGroup.add(stripeBlueRight);
-
-    const stripeYellowGeo = new THREE.BoxGeometry(0.12, 0.12, 15.2);
-    const stripeYellowLeft = new THREE.Mesh(stripeYellowGeo, yellowAccentMat);
-    stripeYellowLeft.position.set(-1.52, 0.76, -2.2);
-    planeGroup.add(stripeYellowLeft);
-    const stripeYellowRight = stripeYellowLeft.clone();
-    stripeYellowRight.position.x = 1.52;
-    planeGroup.add(stripeYellowRight);
-
-    // Six engines: 3 per side under the wing
-    const engineX = [4.2, 8.0, 11.8];
-    for (const x of engineX) {
-      const nacelleGeo = new THREE.CylinderGeometry(0.72, 0.66, 3.4, 20);
-      nacelleGeo.rotateX(Math.PI / 2);
-
-      const leftEngine = new THREE.Mesh(nacelleGeo, engineMat);
-      leftEngine.position.set(-x, 0.55, -1.1);
-      planeGroup.add(leftEngine);
-
-      const rightEngine = leftEngine.clone();
-      rightEngine.position.x = x;
-      planeGroup.add(rightEngine);
-
-      const intakeGeo = new THREE.CylinderGeometry(0.57, 0.57, 0.34, 18);
-      intakeGeo.rotateX(Math.PI / 2);
-      const leftIntake = new THREE.Mesh(intakeGeo, intakeMat);
-      leftIntake.position.set(-x, 0.55, -2.9);
-      planeGroup.add(leftIntake);
-      const rightIntake = leftIntake.clone();
-      rightIntake.position.x = x;
-      planeGroup.add(rightIntake);
+    function addMirror(root, mesh, x) {
+      const a = mesh.clone();
+      a.position.x = -Math.abs(x);
+      root.add(a);
+      const b = mesh.clone();
+      b.position.x = Math.abs(x);
+      root.add(b);
     }
 
-    // Decorative propeller disk near nose, spins with throttle for kid-friendly feedback
-    const propRoot = new THREE.Group();
-    propRoot.position.set(0, 0, -17.3);
-    const propHub = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.18, 0.18, 0.55, 12),
-      new THREE.MeshStandardMaterial({ color: 0x8d96a5, roughness: 0.45, metalness: 0.35 })
-    );
-    propHub.rotation.x = Math.PI / 2;
-    propRoot.add(propHub);
-    const bladeMat = new THREE.MeshStandardMaterial({ color: 0x2a3441, roughness: 0.5, metalness: 0.1 });
-    const bladeA = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 2.8), bladeMat);
-    const bladeB = bladeA.clone();
-    bladeB.rotation.y = Math.PI / 2;
-    propRoot.add(bladeA, bladeB);
-    planeGroup.add(propRoot);
+    function buildProceduralAn225(root) {
+      root.clear();
+
+      const fuselageProfile = [
+        [0.06, -18.8],
+        [1.5, -17.2],
+        [2.55, -13.8],
+        [3.05, -8.6],
+        [3.25, -1.5],
+        [3.05, 9.8],
+        [2.55, 16.8],
+        [1.15, 21.2],
+        [0.08, 23.4]
+      ];
+      const lathePts = fuselageProfile.map(([r, y]) => new THREE.Vector2(r, y));
+      const fuselageGeo = new THREE.LatheGeometry(lathePts, 42);
+      fuselageGeo.rotateX(Math.PI / 2);
+      const fuselage = new THREE.Mesh(fuselageGeo, bodyMat);
+      root.add(fuselage);
+
+      const noseBulgeGeo = new THREE.SphereGeometry(2.4, 26, 20);
+      noseBulgeGeo.scale(1.02, 0.84, 1.1);
+      noseBulgeGeo.translate(0, 0.44, -15.9);
+      root.add(new THREE.Mesh(noseBulgeGeo, bodyMat));
+
+      const humpGeo = typeof THREE.CapsuleGeometry === 'function'
+        ? new THREE.CapsuleGeometry(1, 4, 10, 18)
+        : new THREE.CylinderGeometry(1.08, 0.94, 6.2, 22);
+      humpGeo.rotateX(Math.PI / 2);
+      humpGeo.translate(0, 1.94, -9.3);
+      root.add(new THREE.Mesh(humpGeo, bodyMat));
+
+      const cockpitGlassGeo = new THREE.SphereGeometry(1.74, 24, 18);
+      cockpitGlassGeo.scale(1, 0.5, 1.42);
+      cockpitGlassGeo.translate(0, 2.35, -12.2);
+      root.add(new THREE.Mesh(cockpitGlassGeo, windowMat));
+
+      // High wing with slight anhedral via segmented wing panels
+      const centerWing = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.5, 5.1), bodyMat);
+      centerWing.position.set(0, 1.74, -1.6);
+      root.add(centerWing);
+      for (const side of [-1, 1]) {
+        const wingInner = new THREE.Mesh(new THREE.BoxGeometry(8.7, 0.42, 4.9), bodyMat);
+        wingInner.position.set(side * 9, 1.62, -1.4);
+        wingInner.rotation.z = side * 0.055;
+        root.add(wingInner);
+
+        const wingOuter = new THREE.Mesh(new THREE.BoxGeometry(9.2, 0.34, 4.1), bodyMat);
+        wingOuter.position.set(side * 17.3, 1.28, -1.1);
+        wingOuter.rotation.z = side * 0.11;
+        root.add(wingOuter);
+
+        const wingTip = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.26, 3.4), bodyMat);
+        wingTip.position.set(side * 22.4, 0.96, -0.8);
+        wingTip.rotation.z = side * 0.14;
+        root.add(wingTip);
+      }
+
+      // Tailplanes and twin fins
+      const tailPlane = new THREE.Mesh(new THREE.BoxGeometry(13.4, 0.32, 3.15), bodyMat);
+      tailPlane.position.set(0, 2.4, 11.2);
+      root.add(tailPlane);
+
+      const finGeo = new THREE.BoxGeometry(0.42, 5.3, 3.2);
+      const finLeft = new THREE.Mesh(finGeo, blueAccentMat);
+      finLeft.position.set(-4.8, 5.06, 12.2);
+      root.add(finLeft);
+      const finRight = finLeft.clone();
+      finRight.position.x = 4.8;
+      root.add(finRight);
+
+      // White-blue-yellow livery stripes
+      const stripeBlue = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.18, 26.5), blueAccentMat);
+      stripeBlue.position.set(1.96, 0.95, -1.2);
+      addMirror(root, stripeBlue, 1.96);
+
+      const stripeYellow = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, 22.8), yellowAccentMat);
+      stripeYellow.position.set(1.62, 0.74, -1.1);
+      addMirror(root, stripeYellow, 1.62);
+
+      // Six engines with pylons and fan discs
+      const engineStations = [6.2, 10.4, 14.8];
+      for (const sx of engineStations) {
+        for (const side of [-1, 1]) {
+          const x = side * sx;
+          const pylon = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.75, 1.5), bodyMat);
+          pylon.position.set(x, 0.9, -1.6);
+          root.add(pylon);
+
+          const nacelle = new THREE.Mesh(new THREE.CylinderGeometry(0.94, 0.78, 4.2, 24), engineMat);
+          nacelle.rotation.x = Math.PI / 2;
+          nacelle.position.set(x, 0.28, -1.6);
+          root.add(nacelle);
+
+          const intake = new THREE.Mesh(new THREE.CylinderGeometry(0.76, 0.76, 0.34, 22), intakeMat);
+          intake.rotation.x = Math.PI / 2;
+          intake.position.set(x, 0.28, -3.74);
+          root.add(intake);
+
+          const fan = new THREE.Mesh(new THREE.CircleGeometry(0.68, 20), new THREE.MeshBasicMaterial({ color: 0x364b60 }));
+          fan.position.set(x, 0.28, -3.92);
+          root.add(fan);
+        }
+      }
+
+      // Windows
+      for (let i = 0; i < 11; i++) {
+        const z = -12 + i * 1.15;
+        for (const side of [-1, 1]) {
+          const win = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.17, 0.34), windowMat);
+          win.position.set(side * 2.05, 1.75, z);
+          root.add(win);
+        }
+      }
+
+      // Landing gear: nose + body gears
+      const noseStrut = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 1.2, 10), strutMat);
+      noseStrut.position.set(0, -1.02, -11.7);
+      root.add(noseStrut);
+      for (const side of [-1, 1]) {
+        const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.09, 8, 14), wheelMat);
+        wheel.rotation.y = Math.PI / 2;
+        wheel.position.set(side * 0.32, -1.63, -11.7);
+        root.add(wheel);
+      }
+
+      const bodyGearZ = [2.2, 5.1, 8.2];
+      for (const z of bodyGearZ) {
+        for (const side of [-1, 1]) {
+          const xBase = side * 2.42;
+          const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 1.55, 10), strutMat);
+          strut.position.set(xBase, -1.15, z);
+          root.add(strut);
+          for (let i = -1; i <= 1; i++) {
+            const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.085, 8, 14), wheelMat);
+            wheel.rotation.y = Math.PI / 2;
+            wheel.position.set(xBase + i * 0.3, -1.95, z);
+            root.add(wheel);
+          }
+        }
+      }
+
+      // Nose spinner-style visual feedback
+      propRoot = new THREE.Group();
+      propRoot.position.set(0, 0.35, -18.3);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.56, 12), strutMat);
+      hub.rotation.x = Math.PI / 2;
+      propRoot.add(hub);
+      const bladeMat = new THREE.MeshStandardMaterial({ color: 0x2a3441, roughness: 0.5, metalness: 0.1 });
+      const bladeA = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.055, 3.1), bladeMat);
+      const bladeB = bladeA.clone();
+      bladeB.rotation.y = Math.PI / 2;
+      propRoot.add(bladeA, bladeB);
+      root.add(propRoot);
+    }
+
+    function loadExternalAn225(root, url) {
+      return new Promise((resolve) => {
+        if (!THREE.GLTFLoader) {
+          resolve(false);
+          return;
+        }
+        const loader = new THREE.GLTFLoader();
+        loader.setCrossOrigin('anonymous');
+        loader.load(url, (gltf) => {
+          const model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+          if (!model) {
+            resolve(false);
+            return;
+          }
+
+          const box = new THREE.Box3().setFromObject(model);
+          const size = new THREE.Vector3();
+          box.getSize(size);
+          const center = new THREE.Vector3();
+          box.getCenter(center);
+          const maxDim = Math.max(size.x, size.y, size.z) || 1;
+          const targetLength = 46;
+          const s = targetLength / maxDim;
+          model.scale.setScalar(s);
+          model.position.sub(center.multiplyScalar(s));
+          model.rotation.y = Math.PI;
+          model.position.y += 1.1;
+
+          model.traverse((child) => {
+            if (!child.isMesh) return;
+            child.castShadow = false;
+            child.receiveShadow = false;
+          });
+
+          root.clear();
+          root.add(model);
+
+          // Add visible Ukrainian-style livery hints to guarantee blue/yellow identity.
+          const stripeBlue = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 25), blueAccentMat);
+          stripeBlue.position.set(2.0, 1.0, -1.0);
+          root.add(stripeBlue);
+          const stripeBlueMirror = stripeBlue.clone();
+          stripeBlueMirror.position.x = -2.0;
+          root.add(stripeBlueMirror);
+
+          const stripeYellow = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 21.5), yellowAccentMat);
+          stripeYellow.position.set(1.66, 0.8, -1.05);
+          root.add(stripeYellow);
+          const stripeYellowMirror = stripeYellow.clone();
+          stripeYellowMirror.position.x = -1.66;
+          root.add(stripeYellowMirror);
+
+          propRoot = null;
+          planeModelSource = 'external_glb';
+          log('Loaded external An-225 model', { url });
+          resolve(true);
+        }, undefined, (err) => {
+          log('External An-225 load failed, fallback to procedural', err && err.message ? err.message : err);
+          resolve(false);
+        });
+      });
+    }
+
+    buildProceduralAn225(planeVisual);
+    planeModelSource = 'procedural';
+    const externalAn225Url = 'https://s3-eu-west-1.amazonaws.com/fetchcfd/original/file-1755720206320.glb';
+    loadExternalAn225(planeVisual, externalAn225Url).then((ok) => {
+      if (!ok) {
+        planeModelSource = 'procedural';
+      }
+    });
 
     scene.add(planeGroup);
 
@@ -922,7 +1057,7 @@
         speed += (targetThrottle - speed) * dt * 1.9;
         pitch += joyY * dt * 2.4;
         roll += joyX * dt * 3.5;
-        propRoot.rotation.z += dt * (8 + targetThrottle * 60);
+        if (propRoot) propRoot.rotation.z += dt * (8 + targetThrottle * 60);
 
         pitch *= 0.955;
         roll *= 0.94;
@@ -1055,6 +1190,7 @@
         worldRadius: WORLD_RADIUS,
         fullscreen: Boolean(document.fullscreenElement),
         plane: {
+          modelSource: planeModelSource,
           x: Number(planeGroup.position.x.toFixed(1)),
           y: Number(planeGroup.position.y.toFixed(1)),
           z: Number(planeGroup.position.z.toFixed(1)),

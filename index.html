@@ -130,6 +130,28 @@
       padding: 8px 12px;
     }
 
+    #model-loading {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 30;
+      color: #ffffff;
+      font-weight: 700;
+      font-size: clamp(12px, 1.6vw, 15px);
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.65);
+      background: rgba(0, 0, 0, 0.35);
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.24s ease;
+    }
+
+    #model-loading.show {
+      opacity: 1;
+    }
+
     #joy,
     #throttle {
       position: absolute;
@@ -222,6 +244,7 @@
 
   <div id="throttle"><div id="throttle-knob"></div></div>
   <div id="joy"><div id="stick"></div></div>
+  <div id="model-loading">3D 机模加载中...</div>
 
   <div class="instruction">左侧油门控制速度，右侧摇杆控制俯仰与滚转</div>
 
@@ -240,6 +263,7 @@
     const stick = document.getElementById('stick');
     const throttle = document.getElementById('throttle');
     const throttleKnob = document.getElementById('throttle-knob');
+    const modelLoadingEl = document.getElementById('model-loading');
     const altEl = document.getElementById('alt');
     const spdEl = document.getElementById('spd');
     const landStatusEl = document.getElementById('land-status');
@@ -303,6 +327,12 @@
     const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1a1d22, roughness: 0.86, metalness: 0.02 });
     const strutMat = new THREE.MeshStandardMaterial({ color: 0xa6afbd, roughness: 0.35, metalness: 0.45 });
     const windowMat = new THREE.MeshStandardMaterial({ color: 0x7fb4de, roughness: 0.2, metalness: 0.5 });
+
+    function setModelLoading(text, visible = true) {
+      if (!modelLoadingEl) return;
+      modelLoadingEl.textContent = text;
+      modelLoadingEl.classList.toggle('show', visible);
+    }
 
     function addMirror(root, mesh, x) {
       const a = mesh.clone();
@@ -472,30 +502,46 @@
     function loadExternalAn225(root, url) {
       return new Promise((resolve) => {
         if (!THREE.GLTFLoader) {
+          setModelLoading('GLTFLoader 不可用，使用程序化机模', true);
+          setTimeout(() => setModelLoading('', false), 1800);
           resolve(false);
           return;
         }
         const loader = new THREE.GLTFLoader();
         loader.setCrossOrigin('anonymous');
+        setModelLoading('3D 机模加载中 0%', true);
         loader.load(url, (gltf) => {
           const model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
           if (!model) {
+            setModelLoading('机模为空，回退程序化版本', true);
+            setTimeout(() => setModelLoading('', false), 1800);
             resolve(false);
             return;
           }
 
-          const box = new THREE.Box3().setFromObject(model);
-          const size = new THREE.Vector3();
-          box.getSize(size);
-          const center = new THREE.Vector3();
-          box.getCenter(center);
-          const maxDim = Math.max(size.x, size.y, size.z) || 1;
-          const targetLength = 46;
-          const s = targetLength / maxDim;
-          model.scale.setScalar(s);
-          model.position.sub(center.multiplyScalar(s));
-          model.rotation.y = Math.PI;
-          model.position.y += 1.1;
+          // Normalize orientation/scale/offset for consistent in-game framing.
+          model.rotation.set(0, Math.PI, 0);
+          model.updateMatrixWorld(true);
+
+          const boxRaw = new THREE.Box3().setFromObject(model);
+          const sizeRaw = new THREE.Vector3();
+          boxRaw.getSize(sizeRaw);
+          const horizontalRaw = Math.max(sizeRaw.x, sizeRaw.z) || 1;
+          const targetHorizontal = 28;
+          const scale = THREE.MathUtils.clamp(targetHorizontal / horizontalRaw, 0.05, 7.5);
+          model.scale.setScalar(scale);
+          model.updateMatrixWorld(true);
+
+          const boxScaled = new THREE.Box3().setFromObject(model);
+          const centerScaled = new THREE.Vector3();
+          boxScaled.getCenter(centerScaled);
+          model.position.sub(centerScaled);
+          model.updateMatrixWorld(true);
+
+          const boxCentered = new THREE.Box3().setFromObject(model);
+          model.position.y -= boxCentered.min.y;
+          model.position.y += 0.62;
+          model.position.z -= 0.25;
 
           model.traverse((child) => {
             if (!child.isMesh) return;
@@ -523,9 +569,17 @@
 
           propRoot = null;
           planeModelSource = 'external_glb';
+          setModelLoading('已加载真实 3D 机模 (A380)', true);
+          setTimeout(() => setModelLoading('', false), 1800);
           log('Loaded external An-225 model', { url });
           resolve(true);
-        }, undefined, (err) => {
+        }, (progressEvent) => {
+          if (!progressEvent || !progressEvent.total) return;
+          const p = Math.min(100, Math.round((progressEvent.loaded / progressEvent.total) * 100));
+          setModelLoading(`3D 机模加载中 ${p}%`, true);
+        }, (err) => {
+          setModelLoading('机模加载失败，已回退程序化版本', true);
+          setTimeout(() => setModelLoading('', false), 2200);
           log('External An-225 load failed, fallback to procedural', err && err.message ? err.message : err);
           resolve(false);
         });
@@ -534,7 +588,7 @@
 
     buildProceduralAn225(planeVisual);
     planeModelSource = 'procedural';
-    const externalAn225Url = 'https://s3-eu-west-1.amazonaws.com/fetchcfd/original/file-1755720206320.glb';
+    const externalAn225Url = 'https://raw.githubusercontent.com/Ysurac/FlightAirMap-3dmodels/master/a380/glTF2/A380.glb';
     loadExternalAn225(planeVisual, externalAn225Url).then((ok) => {
       if (!ok) {
         planeModelSource = 'procedural';
@@ -1217,6 +1271,10 @@
           engineHighHz: engineOscHigh ? Number(engineOscHigh.frequency.value.toFixed(2)) : 0,
           windHz: windFilter ? Number(windFilter.frequency.value.toFixed(2)) : 0,
           windGain: windGain ? Number(windGain.gain.value.toFixed(4)) : 0
+        },
+        modelLoading: {
+          visible: Boolean(modelLoadingEl && modelLoadingEl.classList.contains('show')),
+          text: modelLoadingEl ? modelLoadingEl.textContent : ''
         }
       };
       return JSON.stringify(payload);

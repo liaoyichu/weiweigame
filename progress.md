@@ -174,3 +174,28 @@ Original prompt: 你是一个专业的 Web 游戏开发者。我们需要为 6 �
   - `output/model-after-start.png`
   - `output/model-flight.png`
   - `output/model-state.json`（`modelSource: procedural`，飞行状态正常，错误数 0）
+
+## 2026-03-01 (切换为真实 A380 GLB 模型)
+- 按用户指定改为加载真实 GLB：
+  - `https://raw.githubusercontent.com/Ysurac/FlightAirMap-3dmodels/master/a380/glTF2/A380.glb`
+- 保留程序化模型 fallback：GLB 失败时自动回退。
+- 新增加载提示浮层 `#model-loading`：
+  - 显示加载进度（可用时）
+  - 成功提示“已加载真实 3D 机模 (A380)”
+  - 失败提示并自动消隐
+- 修正 GLB 归一化算法（避免模型偏移/比例异常）：
+  - 先统一朝向
+  - 按水平尺寸缩放并限幅
+  - 旋转后重新居中
+  - 底部对齐到机身基准高度
+- `render_game_to_text` 增加 `modelLoading` 状态，便于自动化验证加载提示行为。
+
+### 验证结果
+- 语法检查通过。
+- Playwright 验证：`modelSource: external_glb`，无页面报错。
+- 产物：
+  - `output/a380-loading-early.png`
+  - `output/a380-loading-late.png`
+  - `output/a380-after-start.png`
+  - `output/a380-flight.png`
+  - `output/a380-state.json`

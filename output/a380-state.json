@@ -1,0 +1,42 @@
+{
+  "state": {
+    "coordinate": "origin at scene center; x right, y up, z toward camera positive",
+    "started": true,
+    "worldRadius": 50000,
+    "fullscreen": false,
+    "plane": {
+      "modelSource": "external_glb",
+      "x": 0,
+      "y": 403.6,
+      "z": 9589.1,
+      "pitch": -1.17,
+      "roll": 0,
+      "yaw": 0
+    },
+    "control": {
+      "speed": 3.68,
+      "throttle": 4,
+      "throttleInput": 4,
+      "joyX": 0,
+      "joyY": -0.15,
+      "joyTargetX": 0,
+      "joyTargetY": -0.12
+    },
+    "landingState": "飞行中",
+    "onRunway": true,
+    "audio": {
+      "ready": true,
+      "contextState": "running",
+      "takeoffPlayed": true,
+      "engineLowHz": 198.21,
+      "engineHighHz": 350.75,
+      "windHz": 1023.9,
+      "windGain": 0.1192
+    },
+    "modelLoading": {
+      "visible": false,
+      "text": ""
+    }
+  },
+  "errors": []
+}

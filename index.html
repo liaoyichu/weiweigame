@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>惟惟的超级大飞机</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #87CEEB; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; text-shadow: 2px 2px 4px #000; font-size: 20px; z-index: 10; font-weight: bold; pointer-events: none; }
+        #joy { position: absolute; bottom: 50px; right: 50px; width: 120px; height: 120px; background: rgba(255,255,255,0.2); border-radius: 50%; z-index: 10; border: 2px solid white; touch-action: none; cursor: pointer; }
+        #stick { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: rgba(255,255,255,0.8); border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.5); pointer-events: none; }
+        #throttle { position: absolute; bottom: 50px; left: 30px; width: 60px; height: 200px; background: rgba(255,255,255,0.2); border-radius: 30px; z-index: 10; border: 2px solid white; touch-action: none; cursor: pointer; }
+        #throttle-knob { position: absolute; bottom: 10px; left: 5px; width: 50px; height: 50px; background: #ff4444; border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.5); transition: bottom 0.1s; pointer-events: none; }
+        .instruction { position: absolute; bottom: 10px; color: white; width: 100%; text-align: center; text-shadow: 1px 1px 2px #000; z-index: 10; pointer-events: none; }
+        #start-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; color: white; cursor: pointer; }
+        #start-screen h1 { font-size: 40px; margin-bottom: 20px; }
+        #start-screen p { font-size: 20px; }
+    </style>
+    <!-- Load Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <div id="start-screen" onclick="startGame()">
+        <h1>✈️ 惟惟的超级大飞机</h1>
+        <p>点这里开始飞行！</p>
+    </div>
+
+    <div id="ui">
+        ✈️ 高度: <span id="alt">0</span><br>
+        💨 速度: <span id="spd">0</span>
+    </div>
+    
+    <div id="throttle"><div id="throttle-knob"></div></div>
+    <div id="joy"><div id="stick"></div></div>
+    
+    <div class="instruction">左边推油门加速，右边摇杆控制方向</div>
+
+    <script>
+        let gameStarted = false;
+        function startGame() {
+            document.getElementById('start-screen').style.display = 'none';
+            gameStarted = true;
+        }
+
+        // Setup Three.js scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        scene.fog = new THREE.Fog(0x87CEEB, 100, 1500);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 3000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        dirLight.position.set(100, 200, 100);
+        scene.add(dirLight);
+
+        // Create Plane
+        const planeGroup = new THREE.Group();
+        
+        // Body
+        const bodyGeo = new THREE.CylinderGeometry(1.2, 1.2, 10, 16);
+        bodyGeo.rotateX(Math.PI / 2);
+        const bodyMat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 100 });
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        planeGroup.add(body);
+
+        // Nose
+        const noseGeo = new THREE.ConeGeometry(1.2, 3, 16);
+        noseGeo.rotateX(Math.PI / 2);
+        noseGeo.translate(0, 0, -6.5);
+        const nose = new THREE.Mesh(noseGeo, bodyMat);
+        planeGroup.add(nose);
+
+        // Wings
+        const wingShape = new THREE.Shape();
+        wingShape.moveTo(0, 0);
+        wingShape.lineTo(10, -2);
+        wingShape.lineTo(10, -5);
+        wingShape.lineTo(0, -3);
+        const wingGeo = new THREE.ExtrudeGeometry(wingShape, { depth: 0.2, bevelEnabled: true, bevelSize: 0.1 });
+        wingGeo.rotateX(Math.PI / 2);
+        const wingMat = new THREE.MeshPhongMaterial({ color: 0xcc0000 });
+        
+        const rightWing = new THREE.Mesh(wingGeo, wingMat);
+        rightWing.position.set(1, 0, 1);
+        planeGroup.add(rightWing);
+        
+        const leftWing = new THREE.Mesh(wingGeo, wingMat);
+        leftWing.scale.set(-1, 1, 1);
+        leftWing.position.set(-1, 0, 1);
+        planeGroup.add(leftWing);
+
+        // Tail
+        const tailGeo = new THREE.BoxGeometry(0.2, 3, 3);
+        tailGeo.translate(0, 1.5, 0);
+        const tail = new THREE.Mesh(tailGeo, wingMat);
+        tail.position.set(0, 0, 4);
+        planeGroup.add(tail);
+
+        scene.add(planeGroup);
+        planeGroup.position.y = 50;
+
+        // Ground
+        const groundGeo = new THREE.PlaneGeometry(10000, 10000);
+        const groundMat = new THREE.MeshPhongMaterial({ color: 0x3b7a3b });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+
+        const gridHelper = new THREE.GridHelper(10000, 100, 0x000000, 0x000000);
+        gridHelper.material.opacity = 0.1;
+        gridHelper.material.transparent = true;
+        scene.add(gridHelper);
+
+        // Clouds
+        const cloudGeo = new THREE.IcosahedronGeometry(15, 1);
+        const cloudMat = new THREE.MeshPhongMaterial({ color: 0xffffff, flatShading: true });
+        for(let i=0; i<100; i++) {
+            const mesh = new THREE.Mesh(cloudGeo, cloudMat);
+            mesh.position.set((Math.random()-0.5)*4000, Math.random()*400+100, (Math.random()-0.5)*4000);
+            mesh.scale.set(Math.random()*3+1, Math.random()*1.5+0.5, Math.random()*2+1);
+            scene.add(mesh);
+        }
+
+        // Controls
+        let speed = 0, pitch = 0, roll = 0, yaw = 0, targetThrottle = 0;
+        let joyActive = false, joyX = 0, joyY = 0, thrActive = false;
+        
+        const joy = document.getElementById('joy'), stick = document.getElementById('stick');
+        const throttle = document.getElementById('throttle'), throttleKnob = document.getElementById('throttle-knob');
+        
+        function handleJoy(e) {
+            e.preventDefault();
+            const rect = joy.getBoundingClientRect();
+            const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+            let dx = (e.clientX || (e.touches && e.touches[0].clientX)) - cx;
+            let dy = (e.clientY || (e.touches && e.touches[0].clientY)) - cy;
+            const max = rect.width/2 - 25, dist = Math.sqrt(dx*dx + dy*dy);
+            if(dist > max) { dx *= max/dist; dy *= max/dist; }
+            stick.style.transform = `translate(${dx}px, ${dy}px)`;
+            joyX = dx / max; joyY = dy / max;
+        }
+        
+        joy.addEventListener('pointerdown', e => { joyActive = true; joy.setPointerCapture(e.pointerId); handleJoy(e); });
+        joy.addEventListener('pointermove', e => { if(joyActive) handleJoy(e); });
+        joy.addEventListener('pointerup', e => { joyActive = false; joyX = 0; joyY = 0; stick.style.transform = 'translate(0px,0px)'; });
+
+        function handleThr(e) {
+            e.preventDefault();
+            const rect = throttle.getBoundingClientRect();
+            let y = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
+            y = Math.max(25, Math.min(rect.height - 25, y));
+            const percentage = 1 - ((y - 25) / (rect.height - 50));
+            throttleKnob.style.bottom = `${percentage * 140 + 10}px`;
+            targetThrottle = percentage * 4;
+        }
+        throttle.addEventListener('pointerdown', e => { thrActive = true; throttle.setPointerCapture(e.pointerId); handleThr(e); });
+        throttle.addEventListener('pointermove', e => { if(thrActive) handleThr(e); });
+        throttle.addEventListener('pointerup', () => thrActive = false);
+
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            if(!gameStarted) return;
+            const dt = Math.min(clock.getDelta(), 0.1);
+
+            speed += (targetThrottle - speed) * dt * 2;
+            pitch += joyY * dt * 2.5;
+            roll += joyX * dt * 4;
+            pitch *= 0.96; roll *= 0.96;
+            yaw -= roll * dt * 0.6;
+
+            planeGroup.rotation.set(-pitch, yaw, -roll, 'YXZ');
+            const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(planeGroup.quaternion);
+            planeGroup.position.addScaledVector(direction, speed * 80 * dt);
+            planeGroup.position.y += (-1 + (speed * 0.4)) * 25 * dt; 
+            if (planeGroup.position.y < 2) { planeGroup.position.y = 2; pitch = Math.max(0, pitch); }
+
+            const cameraOffset = new THREE.Vector3(0, 10, 30).applyMatrix4(planeGroup.matrixWorld);
+            camera.position.lerp(cameraOffset, 0.1);
+            camera.lookAt(planeGroup.position);
+
+            if(Math.abs(planeGroup.position.x) > 5000) planeGroup.position.x *= -0.99;
+            if(Math.abs(planeGroup.position.z) > 5000) planeGroup.position.z *= -0.99;
+
+            document.getElementById('alt').innerText = Math.floor(planeGroup.position.y * 10);
+            document.getElementById('spd').innerText = Math.floor(speed * 300);
+            renderer.render(scene, camera);
+        }
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        animate();
+    </script>
+</body>
+</html>

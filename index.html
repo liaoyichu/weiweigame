@@ -335,10 +335,18 @@
   <div class="instruction">左侧油门控制速度，右侧摇杆控制俯仰与滚转</div>
 
   <script>
-    const DEBUG = false;
+    const DEBUG = true;
     const log = (...args) => {
       if (DEBUG) console.log('[PlaneGame]', ...args);
     };
+
+    // Global error handler for debugging
+    window.addEventListener('error', (e) => {
+      console.error('[PlaneGame] Global error:', e.error);
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      console.error('[PlaneGame] Unhandled rejection:', e.reason);
+    });
 
     // DOM references (must be initialized at script top)
     const gameRootEl = document.getElementById('game-root');
@@ -694,29 +702,41 @@
 
     function loadPlaneTemplate(config, onProgress) {
       if (planeTemplateCache.has(config.key)) {
+        log('Using cached model for', config.key);
         return Promise.resolve(planeTemplateCache.get(config.key).clone(true));
       }
+      log('Loading model from', config.url);
       return new Promise((resolve, reject) => {
         if (!THREE.GLTFLoader) {
+          log('GLTFLoader check failed');
           reject(new Error('GLTFLoader unavailable'));
           return;
         }
         const loader = new THREE.GLTFLoader();
-        loader.setCrossOrigin('anonymous');
-        loader.load(config.url, (gltf) => {
-          const model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
-          if (!model) {
-            reject(new Error('Empty glTF scene'));
-            return;
+        log('GLTFLoader created, starting load...');
+        loader.load(
+          config.url,
+          (gltf) => {
+            log('Model loaded successfully:', gltf);
+            const model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+            if (!model) {
+              reject(new Error('Empty glTF scene'));
+              return;
+            }
+            const prepared = normalizeLoadedModel(model, config);
+            planeTemplateCache.set(config.key, prepared);
+            resolve(prepared.clone(true));
+          },
+          (progressEvent) => {
+            if (!progressEvent || !progressEvent.total || typeof onProgress !== 'function') return;
+            const p = Math.min(100, Math.round((progressEvent.loaded / progressEvent.total) * 100));
+            onProgress(p);
+          },
+          (error) => {
+            log('Loader error callback:', error);
+            reject(error);
           }
-          const prepared = normalizeLoadedModel(model, config);
-          planeTemplateCache.set(config.key, prepared);
-          resolve(prepared.clone(true));
-        }, (progressEvent) => {
-          if (!progressEvent || !progressEvent.total || typeof onProgress !== 'function') return;
-          const p = Math.min(100, Math.round((progressEvent.loaded / progressEvent.total) * 100));
-          onProgress(p);
-        }, reject);
+        );
       });
     }
 
@@ -735,6 +755,7 @@
     }
 
     async function loadPlaneByKey(planeKey) {
+      log('loadPlaneByKey called with:', planeKey);
       const config = planeConfigs[planeKey] || planeConfigs.a380;
       selectedPlaneKey = config.key;
       updatePlanePickerUI();
@@ -747,10 +768,12 @@
       }
 
       try {
+        log('Calling loadPlaneTemplate for', config.key);
         const modelInstance = await loadPlaneTemplate(config, (percent) => {
           if (token !== planeLoadToken) return;
           setModelLoading(`${config.displayName} 机模加载中 ${percent}%`, true);
         });
+        log('loadPlaneTemplate resolved, modelInstance:', modelInstance ? 'exists' : 'null');
         if (token !== planeLoadToken) return false;
         mountPlaneModel(modelInstance, `external_${config.key}`);
         activePlaneKey = config.key;
@@ -764,6 +787,7 @@
         log('Loaded plane model', { plane: config.key, url: config.url });
         return true;
       } catch (err) {
+        log('loadPlaneByKey error:', err);
         if (token !== planeLoadToken) return false;
         mountPlaneFallback(config);
         activePlaneKey = config.key;
@@ -783,13 +807,31 @@
         if (token === planeLoadToken) {
           planeLoading = false;
           setStartButtonLoadingState(false);
+          log('loadPlaneByKey finally block done, planeLoading=false');
         }
       }
     }
 
     updatePlanePickerUI();
     setStartButtonLoadingState(true);
-    loadPlaneByKey(selectedPlaneKey);
+    
+    // Timeout fallback: if model takes too long, use fallback and enable button
+    const loadTimeout = setTimeout(() => {
+      if (planeLoading) {
+        log('Model load timeout, using fallback');
+        const config = planeConfigs[selectedPlaneKey] || planeConfigs.a380;
+        mountPlaneFallback(config);
+        planeLoading = false;
+        setStartButtonLoadingState(false);
+        setModelLoading('机模加载超时，已启用备用模式', true);
+        setTimeout(() => setModelLoading('', false), 2000);
+        if (startTipEl) startTipEl.textContent = '备用机模已就绪，点开始飞行！';
+      }
+    }, 10000);
+    
+    loadPlaneByKey(selectedPlaneKey).then(() => {
+      clearTimeout(loadTimeout);
+    });
 
     scene.add(planeGroup);
     const crashDebrisGroup = new THREE.Group();
@@ -1615,16 +1657,22 @@
     };
 
     function triggerStart(event) {
+      log('triggerStart called, event:', event ? event.type : 'no event');
       if (event) {
         event.preventDefault();
         event.stopPropagation();
       }
-      if (gameStarted || startPending) return;
+      if (gameStarted || startPending) {
+        log('triggerStart early return: gameStarted=', gameStarted, 'startPending=', startPending);
+        return;
+      }
       if (planeLoading) {
+        log('triggerStart: planeLoading=true, waiting...');
         if (startTipEl) startTipEl.textContent = `${planeConfigs[selectedPlaneKey].displayName} 机模加载中，请稍等...`;
         return;
       }
       startPending = true;
+      log('triggerStart: calling window.startGame()');
       if (startTipEl) startTipEl.textContent = '正在起飞...';
       window.startGame();
     }

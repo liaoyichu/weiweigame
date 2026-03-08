@@ -298,8 +298,8 @@
       }
     }
   </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="lib/three.min.js"></script>
+<script src="lib/GLTFLoader.js"></script>
 </head>
 <body>
   <div id="game-root"></div>
@@ -334,16 +334,19 @@
 
   <div class="instruction">左侧油门控制速度，右侧摇杆控制俯仰与滚转</div>
 
-  <script>
-    const DEBUG = true;
-    const log = (...args) => {
-      if (DEBUG) console.log('[PlaneGame]', ...args);
-    };
+<script>
+const DEBUG = true;
+const log = (...args) => {
+if (DEBUG) console.log('[PlaneGame]', ...args);
+};
 
-    // Global error handler for debugging
-    window.addEventListener('error', (e) => {
-      console.error('[PlaneGame] Global error:', e.error);
-    });
+log('Script starting, THREE available:', !!window.THREE);
+log('GLTFLoader available:', !!(window.THREE && window.THREE.GLTFLoader));
+
+// Global error handler for debugging
+window.addEventListener('error', (e) => {
+console.error('[PlaneGame] Global error:', e.error);
+});
     window.addEventListener('unhandledrejection', (e) => {
       console.error('[PlaneGame] Unhandled rejection:', e.reason);
     });
@@ -700,21 +703,21 @@
       return prepared;
     }
 
-    function loadPlaneTemplate(config, onProgress) {
-      if (planeTemplateCache.has(config.key)) {
-        log('Using cached model for', config.key);
-        return Promise.resolve(planeTemplateCache.get(config.key).clone(true));
-      }
-      log('Loading model from', config.url);
-      return new Promise((resolve, reject) => {
-        if (!THREE.GLTFLoader) {
-          log('GLTFLoader check failed');
-          reject(new Error('GLTFLoader unavailable'));
-          return;
-        }
-        const loader = new THREE.GLTFLoader();
-        log('GLTFLoader created, starting load...');
-        loader.load(
+function loadPlaneTemplate(config, onProgress) {
+  if (!THREE.GLTFLoader) {
+    log('GLTFLoader not available in loadPlaneTemplate');
+    return Promise.reject(new Error('GLTFLoader unavailable'));
+  }
+  
+  if (planeTemplateCache.has(config.key)) {
+    log('Using cached model for', config.key);
+    return Promise.resolve(planeTemplateCache.get(config.key).clone(true));
+  }
+  log('Loading model from', config.url);
+  return new Promise((resolve, reject) => {
+    const loader = new THREE.GLTFLoader();
+    log('GLTFLoader created, starting load...');
+    loader.load(
           config.url,
           (gltf) => {
             log('Model loaded successfully:', gltf);
@@ -812,26 +815,44 @@
       }
     }
 
-    updatePlanePickerUI();
-    setStartButtonLoadingState(true);
-    
-    // Timeout fallback: if model takes too long, use fallback and enable button
-    const loadTimeout = setTimeout(() => {
-      if (planeLoading) {
-        log('Model load timeout, using fallback');
-        const config = planeConfigs[selectedPlaneKey] || planeConfigs.a380;
-        mountPlaneFallback(config);
-        planeLoading = false;
-        setStartButtonLoadingState(false);
-        setModelLoading('机模加载超时，已启用备用模式', true);
-        setTimeout(() => setModelLoading('', false), 2000);
-        if (startTipEl) startTipEl.textContent = '备用机模已就绪，点开始飞行！';
-      }
-    }, 10000);
-    
-    loadPlaneByKey(selectedPlaneKey).then(() => {
-      clearTimeout(loadTimeout);
-    });
+updatePlanePickerUI();
+setStartButtonLoadingState(true);
+
+// Load plane immediately with fallback
+if (!THREE.GLTFLoader) {
+  log('GLTFLoader not available, using fallback immediately');
+  const config = planeConfigs[selectedPlaneKey] || planeConfigs.a380;
+  mountPlaneFallback(config);
+  planeLoading = false;
+  setStartButtonLoadingState(false);
+  if (startTipEl) startTipEl.textContent = '备用机模已就绪，点开始飞行！';
+} else {
+  // Timeout fallback: if model takes too long, use fallback and enable button
+  const loadTimeout = setTimeout(() => {
+    if (planeLoading) {
+      log('Model load timeout, using fallback');
+      const config = planeConfigs[selectedPlaneKey] || planeConfigs.a380;
+      mountPlaneFallback(config);
+      planeLoading = false;
+      setStartButtonLoadingState(false);
+      setModelLoading('机模加载超时，已启用备用模式', true);
+      setTimeout(() => setModelLoading('', false), 2000);
+      if (startTipEl) startTipEl.textContent = '备用机模已就绪，点开始飞行！';
+    }
+  }, 10000);
+
+  loadPlaneByKey(selectedPlaneKey).then(() => {
+    clearTimeout(loadTimeout);
+  }).catch((err) => {
+    clearTimeout(loadTimeout);
+    log('loadPlaneByKey top-level catch:', err);
+    planeLoading = false;
+    setStartButtonLoadingState(false);
+    const config = planeConfigs[selectedPlaneKey] || planeConfigs.a380;
+    mountPlaneFallback(config);
+    if (startTipEl) startTipEl.textContent = '备用机模已就绪，点开始飞行！';
+  });
+}
 
     scene.add(planeGroup);
     const crashDebrisGroup = new THREE.Group();
@@ -1656,26 +1677,27 @@
       if (startTipEl) startTipEl.textContent = '起飞成功！';
     };
 
-    function triggerStart(event) {
-      log('triggerStart called, event:', event ? event.type : 'no event');
-      if (event) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-      if (gameStarted || startPending) {
-        log('triggerStart early return: gameStarted=', gameStarted, 'startPending=', startPending);
-        return;
-      }
-      if (planeLoading) {
-        log('triggerStart: planeLoading=true, waiting...');
-        if (startTipEl) startTipEl.textContent = `${planeConfigs[selectedPlaneKey].displayName} 机模加载中，请稍等...`;
-        return;
-      }
-      startPending = true;
-      log('triggerStart: calling window.startGame()');
-      if (startTipEl) startTipEl.textContent = '正在起飞...';
-      window.startGame();
-    }
+function triggerStart(event) {
+log('triggerStart called, event:', event ? event.type : 'no event');
+log('Current state: gameStarted=', gameStarted, 'startPending=', startPending, 'planeLoading=', planeLoading);
+if (event) {
+event.preventDefault();
+event.stopPropagation();
+}
+if (gameStarted || startPending) {
+log('triggerStart early return: gameStarted=', gameStarted, 'startPending=', startPending);
+return;
+}
+if (planeLoading) {
+log('triggerStart: planeLoading=true, waiting...');
+if (startTipEl) startTipEl.textContent = `${planeConfigs[selectedPlaneKey].displayName} 机模加载中，请稍等...`;
+return;
+}
+startPending = true;
+log('triggerStart: calling window.startGame()');
+if (startTipEl) startTipEl.textContent = '正在起飞...';
+window.startGame();
+}
 
     function bindStartControls() {
       if (planePickerEl) {

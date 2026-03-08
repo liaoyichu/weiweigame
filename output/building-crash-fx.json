@@ -1,0 +1,52 @@
+{
+  "early": {
+    "coordinate": "origin at scene center; x right, y up, z toward camera positive",
+    "started": false,
+    "worldRadius": 50000,
+    "fullscreen": false,
+    "plane": {
+      "modelSource": "external_glb",
+      "x": -9239.6,
+      "y": 36,
+      "z": 22043.8,
+      "pitch": 0,
+      "roll": 0,
+      "yaw": 0
+    },
+    "control": {
+      "speed": 0,
+      "throttle": 0,
+      "throttleInput": 0,
+      "joyX": 0,
+      "joyY": 0,
+      "joyTargetX": 0,
+      "joyTargetY": 0
+    },
+    "landingState": "飞机解体",
+    "onRunway": false,
+    "audio": {
+      "ready": true,
+      "contextState": "running",
+      "takeoffPlayed": false,
+      "engineLowHz": 70,
+      "engineHighHz": 120,
+      "windHz": 220,
+      "windGain": 0.012
+    },
+    "crash": {
+      "active": true,
+      "reason": "撞上建筑，飞机解体了",
+      "restartReady": false,
+      "timer": 0.33,
+      "debrisCount": 28,
+      "verticalSpeed": 0,
+      "flash": 0.43,
+      "shake": 0.4,
+      "explosionCount": 19
+    },
+    "modelLoading": {
+      "visible": true,
+      "text": "已加载真实 3D 机模 (A380)"
+    }
+  }
+}

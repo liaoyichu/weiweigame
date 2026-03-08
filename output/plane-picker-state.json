@@ -1,0 +1,167 @@
+{
+  "defaultState": {
+    "coordinate": "origin at scene center; x right, y up, z toward camera positive",
+    "started": false,
+    "worldRadius": 50000,
+    "fullscreen": false,
+    "plane": {
+      "selectedKey": "a380",
+      "activeKey": "a380",
+      "selectedName": "A380",
+      "modelSource": "external_a380",
+      "x": 0,
+      "y": 6,
+      "z": 9680,
+      "pitch": 0,
+      "roll": 0,
+      "yaw": 0
+    },
+    "control": {
+      "speed": 0,
+      "throttle": 0,
+      "throttleInput": 0,
+      "joyX": 0,
+      "joyY": 0,
+      "joyTargetX": 0,
+      "joyTargetY": 0
+    },
+    "landingState": "待命",
+    "onRunway": true,
+    "audio": {
+      "ready": false,
+      "contextState": "none",
+      "takeoffPlayed": false,
+      "engineLowHz": 0,
+      "engineHighHz": 0,
+      "windHz": 0,
+      "windGain": 0
+    },
+    "crash": {
+      "active": false,
+      "reason": "",
+      "restartReady": false,
+      "timer": 0,
+      "debrisCount": 0,
+      "verticalSpeed": 0,
+      "flash": 0,
+      "shake": 0,
+      "explosionCount": 0
+    },
+    "modelLoading": {
+      "pendingPlaneKey": "a380",
+      "loading": false,
+      "visible": true,
+      "text": "已加载真实 3D 机模 (A380)"
+    }
+  },
+  "selectedState": {
+    "coordinate": "origin at scene center; x right, y up, z toward camera positive",
+    "started": false,
+    "worldRadius": 50000,
+    "fullscreen": false,
+    "plane": {
+      "selectedKey": "an225",
+      "activeKey": "an225",
+      "selectedName": "An-225 梦想号",
+      "modelSource": "external_an225",
+      "x": 0,
+      "y": 6,
+      "z": 9680,
+      "pitch": 0,
+      "roll": 0,
+      "yaw": 0
+    },
+    "control": {
+      "speed": 0,
+      "throttle": 0,
+      "throttleInput": 0,
+      "joyX": 0,
+      "joyY": 0,
+      "joyTargetX": 0,
+      "joyTargetY": 0
+    },
+    "landingState": "待命",
+    "onRunway": true,
+    "audio": {
+      "ready": false,
+      "contextState": "none",
+      "takeoffPlayed": false,
+      "engineLowHz": 0,
+      "engineHighHz": 0,
+      "windHz": 0,
+      "windGain": 0
+    },
+    "crash": {
+      "active": false,
+      "reason": "",
+      "restartReady": false,
+      "timer": 0,
+      "debrisCount": 0,
+      "verticalSpeed": 0,
+      "flash": 0,
+      "shake": 0,
+      "explosionCount": 0
+    },
+    "modelLoading": {
+      "pendingPlaneKey": "an225",
+      "loading": false,
+      "visible": true,
+      "text": "已加载真实 3D 机模 (An-225)"
+    }
+  },
+  "startedState": {
+    "coordinate": "origin at scene center; x right, y up, z toward camera positive",
+    "started": true,
+    "worldRadius": 50000,
+    "fullscreen": false,
+    "plane": {
+      "selectedKey": "an225",
+      "activeKey": "an225",
+      "selectedName": "An-225 梦想号",
+      "modelSource": "external_an225",
+      "x": 0,
+      "y": 3.8,
+      "z": 9680,
+      "pitch": 0,
+      "roll": 0,
+      "yaw": 0
+    },
+    "control": {
+      "speed": 0,
+      "throttle": 0,
+      "throttleInput": 0,
+      "joyX": 0,
+      "joyY": 0,
+      "joyTargetX": 0,
+      "joyTargetY": 0
+    },
+    "landingState": "跑道滑跑减速",
+    "onRunway": true,
+    "audio": {
+      "ready": true,
+      "contextState": "running",
+      "takeoffPlayed": false,
+      "engineLowHz": 70.27,
+      "engineHighHz": 122.59,
+      "windHz": 215.59,
+      "windGain": 0.0138
+    },
+    "crash": {
+      "active": false,
+      "reason": "",
+      "restartReady": false,
+      "timer": 0,
+      "debrisCount": 0,
+      "verticalSpeed": -18.72,
+      "flash": 0,
+      "shake": 0,
+      "explosionCount": 0
+    },
+    "modelLoading": {
+      "pendingPlaneKey": "an225",
+      "loading": false,
+      "visible": false,
+      "text": ""
+    }
+  }
+}

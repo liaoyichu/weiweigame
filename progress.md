@@ -199,3 +199,144 @@ Original prompt: 你是一个专业的 Web 游戏开发者。我们需要为 6 �
   - `output/a380-after-start.png`
   - `output/a380-flight.png`
   - `output/a380-state.json`
+
+## 2026-03-08 (碰撞爆炸与解体)
+- 按用户要求新增失事系统：
+  - 飞机撞到建筑时立即爆炸解体。
+  - 飞机撞到地面时按场景区分：非跑道触地直接爆炸；跑道上高速/姿态失控硬着陆也会爆炸；跑道低速落地仍允许正常滑跑。
+- 新增可视化解体效果：
+  - 失事时隐藏完整机体，生成 28 个碎片并带抛射/落地回弹动画。
+  - 新增坠毁爆炸音效。
+- 新增重开链路：
+  - 爆炸后约 `1.15s` 自动恢复开始层，按钮文案改为“重新起飞”。
+  - 点击后重置飞机位置、姿态、油门、碎片与失事状态。
+- 为自动化验证补充调试钩子：
+  - `window.__debugFlight.resetFlightState()`
+  - `window.__debugFlight.setPlaneState(...)`
+  - `window.__debugFlight.sampleBuilding(index)`
+- 状态输出增强：
+  - `render_game_to_text` 新增 `crash.active/reason/restartReady/timer/debrisCount/verticalSpeed`
+
+### 本轮测试
+- 语法检查：
+  - 提取内联脚本后用 `vm.Script` 编译，通过。
+- develop-web-game 客户端基础回归：
+  - `output/web-game-crash-base/state-0.json`
+  - 验证开始后不会误判为起飞前即坠毁。
+- Playwright 定点碰撞验证：
+  - 建筑碰撞：`output/building-crash.png`，`output/crash-tests.json` 中 `buildingState.crash.active=true`
+  - 地面碰撞：`output/ground-crash.png`，`output/crash-tests.json` 中 `groundState.crash.active=true`
+- 重开验证：
+  - 爆炸后 `restartReady=true`
+  - 再次点击开始后恢复到出生点，`crash.active=false`
+
+## 2026-03-08 (爆炸视觉反馈加强)
+- 按用户要求继续强化“爆炸解体”的可见性：
+  - 新增 `#crash-flash` 全屏橙白闪光层。
+  - 新增独立爆炸特效组：火球 + 黑烟团，和碎片分离更新。
+  - 新增失事镜头：坠毁时相机立即切到斜上方爆炸视角，并带短时震动。
+- 建筑碰撞视觉修正：
+  - 建筑撞击不再把爆炸中心埋在楼体内部。
+  - 现在会在撞击楼体外侧角落生成爆炸中心，画面中可稳定看到火球和烟雾。
+- 状态输出继续增强：
+  - `render_game_to_text.crash` 新增 `flash/shake/explosionCount`
+
+### 本轮测试
+- 语法检查：
+  - 提取内联脚本后用 `vm.Script` 编译，通过。
+- 建筑爆炸特效截图：
+  - `output/building-crash-fx-early.png`
+  - `output/building-crash-fx.json`
+  - 验证点：画面可见火球、黑烟、碎片；状态里 `flash>0`、`shake>0`
+- 重开回归：
+  - 地面坠毁后仍可通过“重新起飞”恢复，`crash.active=false`
+
+## 2026-03-08 (飞机选择 + 真实 An-225)
+- 新增开始页机型选择功能：
+  - 默认选中 `A380`
+  - 可切换到 `An-225 梦想号`
+  - 开始按钮在机模加载期间禁用，避免“选中的飞机还没切过来就开始”
+- 机模加载逻辑重构为“按机型配置加载”：
+  - `A380` 继续使用真实 GLB：`FlightAirMap-3dmodels/a380`
+  - `An-225` 切换为真实 GLB：`https://s3-eu-west-1.amazonaws.com/fetchcfd/original/file-1755720206320.glb`
+  - 程序化 An-225 仅保留为失败时兜底，不再作为默认展示
+- 状态输出增强：
+  - `render_game_to_text.plane` 新增 `selectedKey/activeKey/selectedName`
+  - `render_game_to_text.modelLoading` 新增 `pendingPlaneKey/loading`
+  - `window.__debugFlight` 新增 `isPlaneLoading()` 与 `selectPlane(key)`
+- 交互修正：
+  - 开始层不再整屏点击即起飞，避免点击机型卡时误触发开局
+
+### 本轮测试
+- 语法检查：
+  - 提取内联脚本后用 `vm.Script` 编译，通过。
+- develop-web-game 客户端基础回归：
+  - `output/web-game-plane-select-base/state-0.json`
+  - 验证默认仍为 `A380`，`modelSource=external_a380`
+- Playwright 机型切换验证：
+  - `output/plane-picker-a380.png`
+  - `output/plane-picker-an225.png`
+  - `output/plane-picker-an225-started.png`
+  - `output/plane-picker-state.json`
+  - 验证点：
+    - 默认机型为 `A380`
+    - 切到 `An-225` 后，开始前和开始后状态均为 `activeKey=an225`
+    - `An-225` 使用真实外部模型：`modelSource=external_an225`
+
+## 2026-03-08 (An-225 朝向修正)
+- 用户反馈 `An-225` 起飞后前后反了。
+- 已将 `An-225` 机型配置的 `rotationY` 从 `Math.PI` 改为 `0`，使其与 `A380` 一样保持机头朝跑道前方。
+- 语法检查：内联脚本编译通过。
+- 说明：这次是单参数修正；重复 Playwright 远程加载验证时出现等待超时，因此未在本轮留下新的稳定截图产物。
+
+## 2026-03-08 (海边城市场景改造)
+- 按用户要求把原先单一草地场景改成“海边城市”布局：
+  - 新增右侧外海与前方海湾水面
+  - 新增连续沙滩/浪花带
+  - 新增远山山脊
+  - 新增 CBD 高楼组与跑道两侧近景天际线
+  - 普通城区保留并改成更偏城市配色
+- 城市采样改为基于海岸线的陆地区域生成，避免建筑刷到海里。
+- 低空追尾镜头略微抬高并后拉，尝试让地貌层次更容易进入画面。
+
+### 本轮测试
+- 语法检查：内联脚本编译通过。
+- 截图产物：
+  - `output/coastal-city-before-start.png`
+  - `output/coastal-city-after-start.png`
+  - `output/coastal-city-before-start-v2.png`
+  - `output/coastal-city-after-start-v5.png`
+  - `output/coastal-city-state.json`
+- 说明：海面、海岸线、楼群已进入场景生成逻辑；主视角下的“山海层次”仍可继续加强，尤其是默认低空跑道镜头的可见性还能再调。
+
+## 2026-03-08 (地表真实感加强)
+- 将原先单色地面改为程序化地形网格：
+  - 基于多频正弦噪声生成轻微起伏
+  - 按海岸距离区分海滩、湿地、草地与内陆颜色
+  - 跑道周边自动压平，避免视觉上顶穿跑道
+- 去掉不真实的 `GridHelper`。
+- 新增城市地表贴片与道路贴片，让 CBD/城区脚下不再只有单色平面。
+
+### 本轮测试
+- 语法检查：内联脚本编译通过。
+- 截图产物：
+  - `output/terrain-realistic-before.png`
+  - `output/terrain-realistic-after.png`
+- 结果：地面已从纯平面升级为带层次的程序化地表；低空跑道视角下跑道仍然占画面主体，但边缘陆地和地表分区已经更自然。
+
+## 2026-03-08 (山体碰撞精度加强)
+- 将山体碰撞从“未旋转的粗略椭圆”改成“按山体自身朝向旋转后的椭圆山坡”判定。
+- 山体边界数据新增 `rotationY / baseY / peakY`，碰撞计算改为先转到山体局部坐标，再按坡面高度求命中。
+- 山体爆炸视觉点也改成沿局部坡面外推，爆炸不再只按轴对齐方向偏移。
+- 调试接口新增 `window.__debugFlight.sampleMountain(index)`，便于自动化脚本抽样验证山体点位。
+
+### 本轮测试
+- 语法检查：内联脚本编译通过。
+- Playwright 定向验证通过：
+  - 找到一个旧算法 `oldNormalized=0.9804` 的斜角样本点，新算法下不会误判爆炸。
+  - 在同一座山的有效坡面点放置飞机，成功触发 `撞上山体，飞机解体了`。
+- 截图与状态产物：
+  - `output/mountain-precision-miss.png`
+  - `output/mountain-precision-crash.png`
+  - `output/mountain-precision-analysis.json`
+- 说明：`develop-web-game` 自带客户端本轮未能直接点击开始按钮，因为默认 `A380` 外部模型加载期间按钮会短时保持 disabled；已用定向 Playwright 脚本完成等价验证。

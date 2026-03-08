@@ -1,0 +1,144 @@
+{
+  "analysis": {
+    "falsePositive": {
+      "mountain": {
+        "x": -32092.750098566285,
+        "z": -28370.7439619927,
+        "baseY": -1.1,
+        "peakY": 4287.581478910812,
+        "height": 3176.8010954894903,
+        "radiusX": 5428.51740788114,
+        "radiusZ": 5938.074386337535,
+        "rotationY": 2.9452187159941055
+      },
+      "localX": 2171.4069631524576,
+      "localZ": -5463.028435430531,
+      "world": {
+        "x": -33156.50905468301,
+        "z": -22589.039648450627
+      },
+      "oldNormalized": 0.9804510418095831
+    },
+    "crashProbe": {
+      "localX": -4342.813926304912,
+      "localZ": -4750.459509070028,
+      "world": {
+        "x": -26906.520451382454,
+        "z": -24558.93069367889
+      },
+      "radial": 0.6727065336509721,
+      "slopeHeight": 3356.2247718423873,
+      "hitHeight": 3360.424771842387
+    }
+  },
+  "missState": {
+    "coordinate": "origin at scene center; x right, y up, z toward camera positive",
+    "started": true,
+    "worldRadius": 50000,
+    "fullscreen": false,
+    "plane": {
+      "selectedKey": "a380",
+      "activeKey": "a380",
+      "selectedName": "A380",
+      "modelSource": "external_a380",
+      "x": -33156.5,
+      "y": 217.8,
+      "z": -22597,
+      "pitch": 0,
+      "roll": 0,
+      "yaw": 0
+    },
+    "control": {
+      "speed": 0.5,
+      "throttle": 0.5,
+      "throttleInput": 0.5,
+      "joyX": 0,
+      "joyY": 0,
+      "joyTargetX": 0,
+      "joyTargetY": 0
+    },
+    "landingState": "飞行中",
+    "onRunway": false,
+    "audio": {
+      "ready": true,
+      "contextState": "running",
+      "takeoffPlayed": true,
+      "engineLowHz": 71.95,
+      "engineHighHz": 124.42,
+      "windHz": 227.74,
+      "windGain": 0.014
+    },
+    "crash": {
+      "active": false,
+      "reason": "",
+      "restartReady": false,
+      "timer": 0,
+      "debrisCount": 0,
+      "verticalSpeed": -12.96,
+      "flash": 0,
+      "shake": 0,
+      "explosionCount": 0
+    },
+    "modelLoading": {
+      "pendingPlaneKey": "a380",
+      "loading": false,
+      "visible": false,
+      "text": ""
+    }
+  },
+  "crashState": {
+    "coordinate": "origin at scene center; x right, y up, z toward camera positive",
+    "started": false,
+    "worldRadius": 50000,
+    "fullscreen": false,
+    "plane": {
+      "selectedKey": "a380",
+      "activeKey": "a380",
+      "selectedName": "A380",
+      "modelSource": "external_a380",
+      "x": -26906.5,
+      "y": 3324.5,
+      "z": -24561.8,
+      "pitch": 0,
+      "roll": 0,
+      "yaw": 0
+    },
+    "control": {
+      "speed": 0,
+      "throttle": 0,
+      "throttleInput": 0,
+      "joyX": 0,
+      "joyY": 0,
+      "joyTargetX": 0,
+      "joyTargetY": 0
+    },
+    "landingState": "飞机解体",
+    "onRunway": false,
+    "audio": {
+      "ready": true,
+      "contextState": "running",
+      "takeoffPlayed": false,
+      "engineLowHz": 71.03,
+      "engineHighHz": 121.31,
+      "windHz": 233.92,
+      "windGain": 0.0139
+    },
+    "crash": {
+      "active": true,
+      "reason": "撞上山体，飞机解体了",
+      "restartReady": false,
+      "timer": 0.25,
+      "debrisCount": 28,
+      "verticalSpeed": 0,
+      "flash": 0.58,
+      "shake": 0.55,
+      "explosionCount": 19
+    },
+    "modelLoading": {
+      "pendingPlaneKey": "a380",
+      "loading": false,
+      "visible": false,
+      "text": ""
+    }
+  }
+}

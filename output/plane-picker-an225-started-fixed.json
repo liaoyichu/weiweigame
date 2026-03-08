@@ -1,0 +1,55 @@
+{
+  "coordinate": "origin at scene center; x right, y up, z toward camera positive",
+  "started": true,
+  "worldRadius": 50000,
+  "fullscreen": false,
+  "plane": {
+    "selectedKey": "an225",
+    "activeKey": "an225",
+    "selectedName": "An-225 梦想号",
+    "modelSource": "external_an225",
+    "x": 0,
+    "y": 6,
+    "z": 9680,
+    "pitch": 0,
+    "roll": 0,
+    "yaw": 0
+  },
+  "control": {
+    "speed": 0,
+    "throttle": 0,
+    "throttleInput": 0,
+    "joyX": 0,
+    "joyY": 0,
+    "joyTargetX": 0,
+    "joyTargetY": 0
+  },
+  "landingState": "飞行中",
+  "onRunway": true,
+  "audio": {
+    "ready": true,
+    "contextState": "running",
+    "takeoffPlayed": false,
+    "engineLowHz": 72,
+    "engineHighHz": 145,
+    "windHz": 200,
+    "windGain": 0.02
+  },
+  "crash": {
+    "active": false,
+    "reason": "",
+    "restartReady": false,
+    "timer": 0,
+    "debrisCount": 0,
+    "verticalSpeed": 0,
+    "flash": 0,
+    "shake": 0,
+    "explosionCount": 0
+  },
+  "modelLoading": {
+    "pendingPlaneKey": "an225",
+    "loading": false,
+    "visible": true,
+    "text": "已加载真实 3D 机模 (An-225)"
+  }
+}

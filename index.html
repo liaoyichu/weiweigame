@@ -82,6 +82,56 @@
       font-size: clamp(18px, 3vw, 26px);
     }
 
+    .plane-picker {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      width: min(88vw, 560px);
+      margin-top: 16px;
+      margin-bottom: 6px;
+    }
+
+    .plane-option {
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      border-radius: 18px;
+      padding: 14px 16px;
+      color: #fff;
+      text-align: left;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.09) 100%);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+      backdrop-filter: blur(6px);
+      cursor: pointer;
+      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .plane-option strong,
+    .plane-option span {
+      display: block;
+    }
+
+    .plane-option strong {
+      font-size: clamp(18px, 2.6vw, 24px);
+      letter-spacing: 0.02em;
+    }
+
+    .plane-option span {
+      margin-top: 6px;
+      font-size: 13px;
+      line-height: 1.4;
+      opacity: 0.84;
+    }
+
+    .plane-option.active {
+      border-color: rgba(255, 241, 160, 0.95);
+      background: linear-gradient(180deg, rgba(255, 232, 137, 0.3) 0%, rgba(76, 157, 255, 0.18) 100%);
+      box-shadow: 0 14px 28px rgba(0, 0, 0, 0.26), 0 0 0 1px rgba(255, 241, 160, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .plane-option:active {
+      transform: scale(0.99);
+    }
+
     #start-btn {
       margin-top: 14px;
       min-width: min(74vw, 300px);
@@ -100,6 +150,13 @@
 
     #start-btn:active {
       transform: scale(0.98);
+    }
+
+    #start-btn:disabled {
+      cursor: wait;
+      opacity: 0.72;
+      filter: saturate(0.72);
+      animation: none;
     }
 
     @keyframes start-btn-breathe {
@@ -150,6 +207,19 @@
 
     #model-loading.show {
       opacity: 1;
+    }
+
+    #crash-flash {
+      position: absolute;
+      inset: 0;
+      z-index: 80;
+      pointer-events: none;
+      opacity: 0;
+      background:
+        radial-gradient(circle at center, rgba(255, 246, 196, 0.92) 0%, rgba(255, 163, 67, 0.7) 24%, rgba(255, 98, 24, 0.34) 48%, rgba(0, 0, 0, 0) 74%),
+        linear-gradient(180deg, rgba(255, 240, 210, 0.28) 0%, rgba(255, 119, 24, 0.18) 100%);
+      mix-blend-mode: screen;
+      transition: opacity 0.08s linear;
     }
 
     #joy,
@@ -206,6 +276,11 @@
     }
 
     @media (max-width: 768px) {
+      .plane-picker {
+        grid-template-columns: 1fr;
+        width: min(92vw, 460px);
+      }
+
       #ui {
         top: 8px;
         left: 8px;
@@ -231,7 +306,17 @@
 
   <div id="start-screen">
     <h1>✈️ 惟惟的超级大飞机</h1>
-    <p id="start-tip">点这里开始飞行！</p>
+    <p id="start-tip">先选飞机，再点开始飞行！</p>
+    <div class="plane-picker" id="plane-picker">
+      <button class="plane-option active" type="button" data-plane-choice="a380" aria-pressed="true">
+        <strong>A380</strong>
+        <span>默认机型，真实 3D 客机模型，适合直接开始飞行。</span>
+      </button>
+      <button class="plane-option" type="button" data-plane-choice="an225" aria-pressed="false">
+        <strong>An-225 梦想号</strong>
+        <span>真实 3D 货运巨机模型，六发、双垂尾、高置机翼。</span>
+      </button>
+    </div>
     <p style="font-size: 15px; opacity: 0.92;">左边油门加速，右边摇杆控制方向</p>
     <button id="start-btn" type="button">开始飞行</button>
   </div>
@@ -245,6 +330,7 @@
   <div id="throttle"><div id="throttle-knob"></div></div>
   <div id="joy"><div id="stick"></div></div>
   <div id="model-loading">3D 机模加载中...</div>
+  <div id="crash-flash"></div>
 
   <div class="instruction">左侧油门控制速度，右侧摇杆控制俯仰与滚转</div>
 
@@ -259,11 +345,14 @@
     const startScreenEl = document.getElementById('start-screen');
     const startTipEl = document.getElementById('start-tip');
     const startBtnEl = document.getElementById('start-btn');
+    const planePickerEl = document.getElementById('plane-picker');
+    const planeOptionEls = Array.from(document.querySelectorAll('[data-plane-choice]'));
     const joy = document.getElementById('joy');
     const stick = document.getElementById('stick');
     const throttle = document.getElementById('throttle');
     const throttleKnob = document.getElementById('throttle-knob');
     const modelLoadingEl = document.getElementById('model-loading');
+    const crashFlashEl = document.getElementById('crash-flash');
     const altEl = document.getElementById('alt');
     const spdEl = document.getElementById('spd');
     const landStatusEl = document.getElementById('land-status');
@@ -271,11 +360,27 @@
     const WORLD_RADIUS = 50000;
     const TAKEOFF_SPEED_THRESHOLD = 1.28;
     const TAKEOFF_PITCH_UP_MIN = 0.16;
+    const SAFE_LANDING_SPEED = 1.28;
+    const SAFE_LANDING_ROLL = 0.38;
+    const SAFE_LANDING_PITCH = 0.46;
+    const PLANE_COLLISION_RADIUS = 16;
+    const PLANE_COLLISION_HEIGHT = 4.2;
     let gameStarted = false;
     let startPending = false;
     let takeoffPlayed = false;
     let landingState = '待命';
     let roughGroundPhase = 0;
+    const crashState = {
+      active: false,
+      reason: '',
+      timer: 0,
+      restartReady: false,
+      focus: new THREE.Vector3()
+    };
+    const crashFx = {
+      flash: 0,
+      shake: 0
+    };
 
     // Three.js setup
     const scene = new THREE.Scene();
@@ -499,126 +604,443 @@
       root.add(propRoot);
     }
 
-    function loadExternalAn225(root, url) {
-      return new Promise((resolve) => {
+    const planeConfigs = {
+      a380: {
+        key: 'a380',
+        displayName: 'A380',
+        url: 'https://raw.githubusercontent.com/Ysurac/FlightAirMap-3dmodels/master/a380/glTF2/A380.glb',
+        targetHorizontal: 28,
+        scaleClamp: [0.05, 7.5],
+        rotationY: Math.PI,
+        offsetY: 0.62,
+        offsetZ: -0.25,
+        successText: '已加载真实 3D 机模 (A380)',
+        fallbackText: 'A380 机模加载失败，已回退备用机模',
+        fallbackBuilder: buildProceduralAn225,
+        fallbackSource: 'fallback_a380'
+      },
+      an225: {
+        key: 'an225',
+        displayName: 'An-225 梦想号',
+        url: 'https://s3-eu-west-1.amazonaws.com/fetchcfd/original/file-1755720206320.glb',
+        targetHorizontal: 30,
+        scaleClamp: [0.04, 7.5],
+        rotationY: 0,
+        offsetY: 0.8,
+        offsetZ: -0.35,
+        successText: '已加载真实 3D 机模 (An-225)',
+        fallbackText: 'An-225 机模加载失败，已回退程序化版本',
+        fallbackBuilder: buildProceduralAn225,
+        fallbackSource: 'procedural_an225'
+      }
+    };
+    let selectedPlaneKey = 'a380';
+    let activePlaneKey = 'a380';
+    let planeLoading = false;
+    let planeLoadToken = 0;
+    const planeTemplateCache = new Map();
+
+    function currentStartButtonLabel() {
+      return (crashState.active || crashState.restartReady) ? '重新起飞' : '开始飞行';
+    }
+
+    function setStartButtonLoadingState(isLoading) {
+      if (!startBtnEl) return;
+      startBtnEl.disabled = Boolean(isLoading);
+      startBtnEl.textContent = isLoading ? '机模加载中...' : currentStartButtonLabel();
+    }
+
+    function updatePlanePickerUI() {
+      for (const optionEl of planeOptionEls) {
+        const isActive = optionEl.dataset.planeChoice === selectedPlaneKey;
+        optionEl.classList.toggle('active', isActive);
+        optionEl.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      }
+    }
+
+    function normalizeLoadedModel(model, config) {
+      const prepared = model.clone(true);
+      prepared.rotation.set(0, config.rotationY ?? Math.PI, 0);
+      prepared.updateMatrixWorld(true);
+
+      const boxRaw = new THREE.Box3().setFromObject(prepared);
+      const sizeRaw = new THREE.Vector3();
+      boxRaw.getSize(sizeRaw);
+      const horizontalRaw = Math.max(sizeRaw.x, sizeRaw.z) || 1;
+      const minScale = config.scaleClamp ? config.scaleClamp[0] : 0.05;
+      const maxScale = config.scaleClamp ? config.scaleClamp[1] : 7.5;
+      const scale = THREE.MathUtils.clamp((config.targetHorizontal || 28) / horizontalRaw, minScale, maxScale);
+      prepared.scale.setScalar(scale);
+      prepared.updateMatrixWorld(true);
+
+      const boxScaled = new THREE.Box3().setFromObject(prepared);
+      const centerScaled = new THREE.Vector3();
+      boxScaled.getCenter(centerScaled);
+      prepared.position.sub(centerScaled);
+      prepared.updateMatrixWorld(true);
+
+      const boxCentered = new THREE.Box3().setFromObject(prepared);
+      prepared.position.y -= boxCentered.min.y;
+      prepared.position.y += config.offsetY || 0;
+      prepared.position.z += config.offsetZ || 0;
+
+      prepared.traverse((child) => {
+        if (!child.isMesh) return;
+        child.castShadow = false;
+        child.receiveShadow = false;
+      });
+      return prepared;
+    }
+
+    function loadPlaneTemplate(config, onProgress) {
+      if (planeTemplateCache.has(config.key)) {
+        return Promise.resolve(planeTemplateCache.get(config.key).clone(true));
+      }
+      return new Promise((resolve, reject) => {
         if (!THREE.GLTFLoader) {
-          setModelLoading('GLTFLoader 不可用，使用程序化机模', true);
-          setTimeout(() => setModelLoading('', false), 1800);
-          resolve(false);
+          reject(new Error('GLTFLoader unavailable'));
           return;
         }
         const loader = new THREE.GLTFLoader();
         loader.setCrossOrigin('anonymous');
-        setModelLoading('3D 机模加载中 0%', true);
-        loader.load(url, (gltf) => {
+        loader.load(config.url, (gltf) => {
           const model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
           if (!model) {
-            setModelLoading('机模为空，回退程序化版本', true);
-            setTimeout(() => setModelLoading('', false), 1800);
-            resolve(false);
+            reject(new Error('Empty glTF scene'));
             return;
           }
-
-          // Normalize orientation/scale/offset for consistent in-game framing.
-          model.rotation.set(0, Math.PI, 0);
-          model.updateMatrixWorld(true);
-
-          const boxRaw = new THREE.Box3().setFromObject(model);
-          const sizeRaw = new THREE.Vector3();
-          boxRaw.getSize(sizeRaw);
-          const horizontalRaw = Math.max(sizeRaw.x, sizeRaw.z) || 1;
-          const targetHorizontal = 28;
-          const scale = THREE.MathUtils.clamp(targetHorizontal / horizontalRaw, 0.05, 7.5);
-          model.scale.setScalar(scale);
-          model.updateMatrixWorld(true);
-
-          const boxScaled = new THREE.Box3().setFromObject(model);
-          const centerScaled = new THREE.Vector3();
-          boxScaled.getCenter(centerScaled);
-          model.position.sub(centerScaled);
-          model.updateMatrixWorld(true);
-
-          const boxCentered = new THREE.Box3().setFromObject(model);
-          model.position.y -= boxCentered.min.y;
-          model.position.y += 0.62;
-          model.position.z -= 0.25;
-
-          model.traverse((child) => {
-            if (!child.isMesh) return;
-            child.castShadow = false;
-            child.receiveShadow = false;
-          });
-
-          root.clear();
-          root.add(model);
-
-          // Add visible Ukrainian-style livery hints to guarantee blue/yellow identity.
-          const stripeBlue = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 25), blueAccentMat);
-          stripeBlue.position.set(2.0, 1.0, -1.0);
-          root.add(stripeBlue);
-          const stripeBlueMirror = stripeBlue.clone();
-          stripeBlueMirror.position.x = -2.0;
-          root.add(stripeBlueMirror);
-
-          const stripeYellow = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 21.5), yellowAccentMat);
-          stripeYellow.position.set(1.66, 0.8, -1.05);
-          root.add(stripeYellow);
-          const stripeYellowMirror = stripeYellow.clone();
-          stripeYellowMirror.position.x = -1.66;
-          root.add(stripeYellowMirror);
-
-          propRoot = null;
-          planeModelSource = 'external_glb';
-          setModelLoading('已加载真实 3D 机模 (A380)', true);
-          setTimeout(() => setModelLoading('', false), 1800);
-          log('Loaded external An-225 model', { url });
-          resolve(true);
+          const prepared = normalizeLoadedModel(model, config);
+          planeTemplateCache.set(config.key, prepared);
+          resolve(prepared.clone(true));
         }, (progressEvent) => {
-          if (!progressEvent || !progressEvent.total) return;
+          if (!progressEvent || !progressEvent.total || typeof onProgress !== 'function') return;
           const p = Math.min(100, Math.round((progressEvent.loaded / progressEvent.total) * 100));
-          setModelLoading(`3D 机模加载中 ${p}%`, true);
-        }, (err) => {
-          setModelLoading('机模加载失败，已回退程序化版本', true);
-          setTimeout(() => setModelLoading('', false), 2200);
-          log('External An-225 load failed, fallback to procedural', err && err.message ? err.message : err);
-          resolve(false);
-        });
+          onProgress(p);
+        }, reject);
       });
     }
 
-    buildProceduralAn225(planeVisual);
-    planeModelSource = 'procedural';
-    const externalAn225Url = 'https://raw.githubusercontent.com/Ysurac/FlightAirMap-3dmodels/master/a380/glTF2/A380.glb';
-    loadExternalAn225(planeVisual, externalAn225Url).then((ok) => {
-      if (!ok) {
-        planeModelSource = 'procedural';
+    function mountPlaneModel(modelRoot, source) {
+      planeVisual.clear();
+      propRoot = null;
+      planeVisual.add(modelRoot);
+      planeModelSource = source;
+    }
+
+    function mountPlaneFallback(config) {
+      planeVisual.clear();
+      propRoot = null;
+      (config.fallbackBuilder || buildProceduralAn225)(planeVisual);
+      planeModelSource = config.fallbackSource || 'procedural';
+    }
+
+    async function loadPlaneByKey(planeKey) {
+      const config = planeConfigs[planeKey] || planeConfigs.a380;
+      selectedPlaneKey = config.key;
+      updatePlanePickerUI();
+      const token = ++planeLoadToken;
+      planeLoading = true;
+      setStartButtonLoadingState(true);
+      setModelLoading(`${config.displayName} 机模加载中 0%`, true);
+      if (startTipEl && !gameStarted && !crashState.active) {
+        startTipEl.textContent = `${config.displayName} 加载中...`;
       }
-    });
+
+      try {
+        const modelInstance = await loadPlaneTemplate(config, (percent) => {
+          if (token !== planeLoadToken) return;
+          setModelLoading(`${config.displayName} 机模加载中 ${percent}%`, true);
+        });
+        if (token !== planeLoadToken) return false;
+        mountPlaneModel(modelInstance, `external_${config.key}`);
+        activePlaneKey = config.key;
+        setModelLoading(config.successText, true);
+        setTimeout(() => {
+          if (token === planeLoadToken) setModelLoading('', false);
+        }, 1800);
+        if (startTipEl && !gameStarted && !crashState.active) {
+          startTipEl.textContent = `${config.displayName} 已就绪，点开始飞行！`;
+        }
+        log('Loaded plane model', { plane: config.key, url: config.url });
+        return true;
+      } catch (err) {
+        if (token !== planeLoadToken) return false;
+        mountPlaneFallback(config);
+        activePlaneKey = config.key;
+        setModelLoading(config.fallbackText, true);
+        setTimeout(() => {
+          if (token === planeLoadToken) setModelLoading('', false);
+        }, 2200);
+        if (startTipEl && !gameStarted && !crashState.active) {
+          startTipEl.textContent = `${config.displayName} 备用机模已就绪，点开始飞行！`;
+        }
+        log('Plane model load failed, fallback applied', {
+          plane: config.key,
+          error: err && err.message ? err.message : err
+        });
+        return false;
+      } finally {
+        if (token === planeLoadToken) {
+          planeLoading = false;
+          setStartButtonLoadingState(false);
+        }
+      }
+    }
+
+    updatePlanePickerUI();
+    setStartButtonLoadingState(true);
+    loadPlaneByKey(selectedPlaneKey);
 
     scene.add(planeGroup);
-
-    // Ground / horizon
-    const groundGeo = new THREE.CircleGeometry(56000, 128);
-    const ground = new THREE.Mesh(
-      groundGeo,
-      new THREE.MeshLambertMaterial({ color: 0x4f9f5b })
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -1.2;
-    scene.add(ground);
-
-    const grid = new THREE.GridHelper(20000, 220, 0x365f3f, 0x365f3f);
-    grid.material.opacity = 0.25;
-    grid.material.transparent = true;
-    grid.position.y = -0.75;
-    scene.add(grid);
-
-    // Airport runway at scene origin (y = 0)
+    const crashDebrisGroup = new THREE.Group();
+    scene.add(crashDebrisGroup);
+    const crashExplosionGroup = new THREE.Group();
+    scene.add(crashExplosionGroup);
     const runwayLength = 22000;
     const runwayWidth = 1200;
     const runwayHalfW = runwayWidth * 0.5;
     const runwayHalfL = runwayLength * 0.5;
     const runwayEdgeLineOffset = runwayHalfW - 28;
+
+    function coastXAt(z) {
+      return 11800 + Math.sin(z / 5200) * 2300 + Math.sin(z / 1450) * 520;
+    }
+
+    function isLandArea(x, z) {
+      return x <= coastXAt(z);
+    }
+
+    function pseudoNoise2D(x, z) {
+      return (
+        Math.sin(x / 2100) * 0.46 +
+        Math.cos(z / 1750) * 0.34 +
+        Math.sin((x + z) / 1450) * 0.18 +
+        Math.cos(Math.hypot(x + 9000, z - 3000) / 2600) * 0.22
+      );
+    }
+
+    // Ground / horizon: coastal city with sea, beach, mountain ridge and urban districts.
+    const ocean = new THREE.Mesh(
+      new THREE.PlaneGeometry(86000, 126000, 12, 24),
+      new THREE.MeshPhongMaterial({
+        color: 0x3f86b7,
+        shininess: 88,
+        transparent: true,
+        opacity: 0.95
+      })
+    );
+    ocean.rotation.x = -Math.PI / 2;
+    ocean.position.set(22000, -1.42, 0);
+    scene.add(ocean);
+
+    const oceanShimmer = new THREE.Mesh(
+      new THREE.PlaneGeometry(86000, 126000, 8, 18),
+      new THREE.MeshLambertMaterial({
+        color: 0x67c4de,
+        transparent: true,
+        opacity: 0.2,
+        depthWrite: false
+      })
+    );
+    oceanShimmer.rotation.x = -Math.PI / 2;
+    oceanShimmer.position.set(22000, -1.28, 0);
+    scene.add(oceanShimmer);
+
+    const bayWater = new THREE.Mesh(
+      new THREE.PlaneGeometry(98000, 36000, 10, 12),
+      new THREE.MeshPhongMaterial({
+        color: 0x4b96c8,
+        shininess: 82,
+        transparent: true,
+        opacity: 0.92
+      })
+    );
+    bayWater.rotation.x = -Math.PI / 2;
+    bayWater.position.set(0, -1.34, -31500);
+    scene.add(bayWater);
+
+    const terrainGeo = new THREE.PlaneGeometry(112000, 112000, 180, 180);
+    terrainGeo.rotateX(-Math.PI / 2);
+    const terrainPos = terrainGeo.attributes.position;
+    const terrainColors = [];
+    for (let i = 0; i < terrainPos.count; i++) {
+      const x = terrainPos.getX(i);
+      const z = terrainPos.getZ(i);
+      const coast = coastXAt(z);
+      const coastDelta = coast - x;
+      const runwayBlend = Math.max(Math.abs(x) / (runwayWidth * 0.5 + 420), Math.abs(z) / (runwayLength * 0.5 + 900));
+      const runwayFlat = THREE.MathUtils.clamp((runwayBlend - 0.88) / 0.28, 0, 1);
+      const inlandBoost = THREE.MathUtils.clamp((-x - 9000) / 28000, 0, 1);
+      const beachBlend = THREE.MathUtils.clamp((coastDelta + 1400) / 3200, 0, 1);
+      const landMask = THREE.MathUtils.clamp((coastDelta + 200) / 2400, 0, 1);
+      const terrainNoise = pseudoNoise2D(x, z);
+      const rolling = terrainNoise * 0.95 + inlandBoost * 0.8 + Math.cos(z / 3800) * 0.24;
+      let y = -1.55;
+      if (coastDelta > -1800) {
+        y = -1.32 + beachBlend * 0.52 + landMask * rolling * 0.5;
+      }
+      if (x < -16000) {
+        y += inlandBoost * 2.3;
+      }
+      y = THREE.MathUtils.lerp(-1.2, y, runwayFlat);
+      terrainPos.setY(i, y);
+
+      const baseColor = new THREE.Color();
+      if (coastDelta < -700) {
+        baseColor.setRGB(0.58, 0.72, 0.63);
+      } else if (coastDelta < 1200) {
+        baseColor.setRGB(0.84, 0.78, 0.58);
+      } else {
+        const lush = THREE.MathUtils.clamp((terrainNoise + 1.2) / 2.4, 0, 1);
+        baseColor.setRGB(
+          0.29 + lush * 0.16 + inlandBoost * 0.06,
+          0.46 + lush * 0.2 + inlandBoost * 0.08,
+          0.24 + lush * 0.08
+        );
+      }
+      if (x < -22000) {
+        baseColor.offsetHSL(-0.02, -0.05, -0.08);
+      }
+      terrainColors.push(baseColor.r, baseColor.g, baseColor.b);
+    }
+    terrainGeo.setAttribute('color', new THREE.Float32BufferAttribute(terrainColors, 3));
+    terrainGeo.computeVertexNormals();
+    const terrain = new THREE.Mesh(
+      terrainGeo,
+      new THREE.MeshLambertMaterial({ vertexColors: true })
+    );
+    terrain.position.y = 0;
+    scene.add(terrain);
+
+    const districtPatches = new THREE.Group();
+    const urbanDistricts = [
+      { x: 2600, z: -14800, w: 13500, h: 9800, color: 0x6d7c6f, opacity: 0.22 },
+      { x: -11800, z: 4200, w: 22000, h: 18000, color: 0x6c8c63, opacity: 0.18 },
+      { x: 18200, z: -2100, w: 18000, h: 16000, color: 0xd5c48d, opacity: 0.14 }
+    ];
+    for (const patch of urbanDistricts) {
+      const patchMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(patch.w, patch.h),
+        new THREE.MeshLambertMaterial({
+          color: patch.color,
+          transparent: true,
+          opacity: patch.opacity,
+          depthWrite: false
+        })
+      );
+      patchMesh.rotation.x = -Math.PI / 2;
+      patchMesh.position.set(patch.x, -0.96, patch.z);
+      districtPatches.add(patchMesh);
+    }
+    scene.add(districtPatches);
+
+    const beachGroup = new THREE.Group();
+    for (let i = 0; i < 16; i++) {
+      const z = -54000 + i * 7200 + Math.sin(i * 0.9) * 900;
+      const beach = new THREE.Mesh(
+        new THREE.CircleGeometry(3400 + (i % 3) * 520, 28),
+        new THREE.MeshLambertMaterial({
+          color: i % 2 === 0 ? 0xe7d09a : 0xdabf82,
+          transparent: true,
+          opacity: 0.96
+        })
+      );
+      beach.rotation.x = -Math.PI / 2;
+      beach.scale.set(1.9, 0.42 + (i % 4) * 0.06, 1);
+      beach.position.set(coastXAt(z) - 1200 + Math.sin(i * 1.7) * 240, -1.04, z);
+      beach.renderOrder = 4;
+      beachGroup.add(beach);
+
+      const foam = new THREE.Mesh(
+        new THREE.CircleGeometry(1700 + (i % 4) * 240, 20),
+        new THREE.MeshLambertMaterial({
+          color: 0xfaf9ef,
+          transparent: true,
+          opacity: 0.34,
+          depthWrite: false
+        })
+      );
+      foam.rotation.x = -Math.PI / 2;
+      foam.scale.set(1.85, 0.12, 1);
+      foam.position.set(coastXAt(z) + 460 + Math.cos(i * 1.2) * 120, -1.16, z);
+      foam.renderOrder = 3;
+      beachGroup.add(foam);
+    }
+    scene.add(beachGroup);
+
+    const roadStripeMat = new THREE.MeshLambertMaterial({
+      color: 0x5e666e,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false
+    });
+    const cityRoads = new THREE.Group();
+    const boulevard = new THREE.Mesh(new THREE.PlaneGeometry(12000, 220), roadStripeMat);
+    boulevard.rotation.x = -Math.PI / 2;
+    boulevard.position.set(2400, -0.92, -14800);
+    cityRoads.add(boulevard);
+    for (let i = 0; i < 6; i++) {
+      const crossRoad = new THREE.Mesh(new THREE.PlaneGeometry(180, 8200 + i * 400), roadStripeMat);
+      crossRoad.rotation.x = -Math.PI / 2;
+      crossRoad.position.set(-2600 + i * 1800, -0.91, -15000 + (i % 2 === 0 ? 300 : -220));
+      cityRoads.add(crossRoad);
+    }
+    const coastRoad = new THREE.Mesh(new THREE.PlaneGeometry(24000, 180), roadStripeMat);
+    coastRoad.rotation.x = -Math.PI / 2;
+    coastRoad.position.set(7800, -0.94, 3600);
+    cityRoads.add(coastRoad);
+    scene.add(cityRoads);
+
+    const mountainCount = 36;
+    const mountainGeo = new THREE.ConeGeometry(1, 1.8, 6);
+    const mountainMat = new THREE.MeshLambertMaterial({ color: 0x607968 });
+    const mountains = new THREE.InstancedMesh(mountainGeo, mountainMat, mountainCount);
+    const mountainCapMat = new THREE.MeshLambertMaterial({
+      color: 0xdce7e0,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false
+    });
+    const mountainCaps = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 0.45, 6), mountainCapMat, mountainCount);
+    const instanceDummy = new THREE.Object3D();
+    const mountainBounds = [];
+    for (let i = 0; i < mountainCount; i++) {
+      const x = -32000 + i * 1700 + (Math.random() - 0.5) * 2600;
+      const z = -24500 - Math.random() * 9000;
+      const height = 2600 + Math.random() * 5200;
+      const width = 4200 + Math.random() * 4600;
+      const depth = width * (0.82 + Math.random() * 0.3);
+      const rotationY = Math.random() * Math.PI;
+      mountainBounds.push({
+        x,
+        z,
+        baseY: -1.1,
+        peakY: height * 1.35 - 1.1,
+        height,
+        radiusX: width,
+        radiusZ: depth,
+        rotationY
+      });
+      instanceDummy.position.set(x, height * 0.45 - 1.1, z);
+      instanceDummy.scale.set(width, height, depth);
+      instanceDummy.rotation.y = rotationY;
+      instanceDummy.updateMatrix();
+      mountains.setMatrixAt(i, instanceDummy.matrix);
+
+      instanceDummy.position.set(x, height * 0.88 - 1.1, z);
+      instanceDummy.scale.set(width * 0.38, height * 0.22, width * 0.38);
+      instanceDummy.rotation.y += 0.2;
+      instanceDummy.updateMatrix();
+      mountainCaps.setMatrixAt(i, instanceDummy.matrix);
+    }
+    mountains.instanceMatrix.needsUpdate = true;
+    mountainCaps.instanceMatrix.needsUpdate = true;
+    mountains.frustumCulled = false;
+    mountainCaps.frustumCulled = false;
+    scene.add(mountains);
+    scene.add(mountainCaps);
+
+    // Airport runway at scene origin (y = 0)
     const runway = new THREE.Mesh(
       new THREE.PlaneGeometry(runwayWidth, runwayLength),
       new THREE.MeshLambertMaterial({
@@ -673,39 +1095,139 @@
     // Spawn plane at runway threshold, pointing along runway toward -Z
     planeGroup.position.set(0, 6, runwayLength * 0.44);
 
-    function sampleGroundPoint(exclusionHalfW, exclusionHalfL, maxRadius) {
+    function sampleGroundPoint(exclusionHalfW, exclusionHalfL, maxRadius, landOnly = true) {
       let x = 0;
       let z = 0;
       let valid = false;
       while (!valid) {
         x = (Math.random() - 0.5) * maxRadius * 2;
         z = (Math.random() - 0.5) * maxRadius * 2;
-        valid = Math.abs(x) > exclusionHalfW || Math.abs(z) > exclusionHalfL;
+        const outsideRunway = Math.abs(x) > exclusionHalfW || Math.abs(z) > exclusionHalfL;
+        valid = outsideRunway && (!landOnly || isLandArea(x, z));
       }
       return { x, z };
     }
 
+    const cbdBounds = {
+      centerX: 1400,
+      centerZ: -15800,
+      radiusX: 6200,
+      radiusZ: 8800
+    };
+
+    function sampleCBDPoint() {
+      let x = 0;
+      let z = 0;
+      let valid = false;
+      while (!valid) {
+        x = cbdBounds.centerX + (Math.random() - 0.5) * cbdBounds.radiusX * 2;
+        z = cbdBounds.centerZ + (Math.random() - 0.5) * cbdBounds.radiusZ * 2;
+        const inEllipse = ((x - cbdBounds.centerX) ** 2) / (cbdBounds.radiusX ** 2) + ((z - cbdBounds.centerZ) ** 2) / (cbdBounds.radiusZ ** 2) < 1;
+        const outsideRunway = Math.abs(x) > runwayHalfW + 900 || Math.abs(z) > runwayHalfL + 1500;
+        valid = inEllipse && outsideRunway && isLandArea(x, z) && x > -2000;
+      }
+      return { x, z };
+    }
+
+    // CBD skyline
+    const cbdCount = 34;
+    const towerGeo = new THREE.BoxGeometry(1, 1, 1);
+    const towerMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const cbdTowers = new THREE.InstancedMesh(towerGeo, towerMat, cbdCount);
+    const houseBounds = [];
+    for (let i = 0; i < cbdCount; i++) {
+      const footprintX = 34 + Math.random() * 46;
+      const footprintZ = 34 + Math.random() * 54;
+      const height = 180 + Math.random() * 420;
+      const p = sampleCBDPoint();
+      houseBounds.push({
+        x: p.x,
+        z: p.z,
+        halfX: footprintX * 0.5,
+        halfZ: footprintZ * 0.5,
+        height
+      });
+      instanceDummy.position.set(p.x, height * 0.5, p.z);
+      instanceDummy.scale.set(footprintX, height, footprintZ);
+      instanceDummy.rotation.set(0, Math.random() * 0.22, 0);
+      instanceDummy.updateMatrix();
+      cbdTowers.setMatrixAt(i, instanceDummy.matrix);
+      cbdTowers.setColorAt(i, new THREE.Color().setHSL(0.54 + Math.random() * 0.06, 0.34 + Math.random() * 0.24, 0.43 + Math.random() * 0.2));
+    }
+    cbdTowers.instanceMatrix.needsUpdate = true;
+    if (cbdTowers.instanceColor) cbdTowers.instanceColor.needsUpdate = true;
+    cbdTowers.frustumCulled = false;
+    scene.add(cbdTowers);
+
+    const skylineCount = 18;
+    const skylineTowers = new THREE.InstancedMesh(towerGeo, towerMat, skylineCount);
+    for (let i = 0; i < skylineCount; i++) {
+      const side = i % 2 === 0 ? -1 : 1;
+      const footprintX = 38 + Math.random() * 36;
+      const footprintZ = 36 + Math.random() * 42;
+      const height = 220 + Math.random() * 360;
+      const x = side * (runwayHalfW + 900 + Math.random() * 1500);
+      const z = -16500 + Math.floor(i / 2) * 1450 + (Math.random() - 0.5) * 900;
+      houseBounds.push({
+        x,
+        z,
+        halfX: footprintX * 0.5,
+        halfZ: footprintZ * 0.5,
+        height
+      });
+      instanceDummy.position.set(x, height * 0.5, z);
+      instanceDummy.scale.set(footprintX, height, footprintZ);
+      instanceDummy.rotation.set(0, Math.random() * 0.18, 0);
+      instanceDummy.updateMatrix();
+      skylineTowers.setMatrixAt(i, instanceDummy.matrix);
+      skylineTowers.setColorAt(i, new THREE.Color().setHSL(0.56 + Math.random() * 0.04, 0.25 + Math.random() * 0.18, 0.38 + Math.random() * 0.16));
+    }
+    skylineTowers.instanceMatrix.needsUpdate = true;
+    if (skylineTowers.instanceColor) skylineTowers.instanceColor.needsUpdate = true;
+    skylineTowers.frustumCulled = false;
+    scene.add(skylineTowers);
+
     // Procedural city blocks (instanced for lower draw calls)
-    const houseCount = 200;
+    const houseCount = 190;
     const houseGeo = new THREE.BoxGeometry(1, 1, 1);
     const houseMat = new THREE.MeshLambertMaterial({ vertexColors: true });
     const houses = new THREE.InstancedMesh(houseGeo, houseMat, houseCount);
-    const instanceDummy = new THREE.Object3D();
     for (let i = 0; i < houseCount; i++) {
-      const footprintX = 24 + Math.random() * 34;
-      const footprintZ = 24 + Math.random() * 34;
-      const height = 26 + Math.random() * 160;
+      const footprintX = 22 + Math.random() * 30;
+      const footprintZ = 22 + Math.random() * 30;
+      const height = 22 + Math.random() * 150;
       const p = sampleGroundPoint(runwayHalfW + 700, runwayHalfL + 1200, 23000);
+      houseBounds.push({
+        x: p.x,
+        z: p.z,
+        halfX: footprintX * 0.5,
+        halfZ: footprintZ * 0.5,
+        height
+      });
       instanceDummy.position.set(p.x, height * 0.5, p.z);
       instanceDummy.scale.set(footprintX, height, footprintZ);
+      instanceDummy.rotation.set(0, Math.random() * 0.35, 0);
       instanceDummy.updateMatrix();
       houses.setMatrixAt(i, instanceDummy.matrix);
-      houses.setColorAt(i, new THREE.Color().setHSL(0.05 + Math.random() * 0.13, 0.2 + Math.random() * 0.25, 0.3 + Math.random() * 0.28));
+      houses.setColorAt(i, new THREE.Color().setHSL(0.04 + Math.random() * 0.12, 0.16 + Math.random() * 0.16, 0.34 + Math.random() * 0.25));
     }
     houses.instanceMatrix.needsUpdate = true;
     if (houses.instanceColor) houses.instanceColor.needsUpdate = true;
     houses.frustumCulled = false;
     scene.add(houses);
+
+    const harborIslands = new THREE.Group();
+    for (let i = 0; i < 7; i++) {
+      const island = new THREE.Mesh(
+        new THREE.CircleGeometry(900 + Math.random() * 1100, 24),
+        new THREE.MeshLambertMaterial({ color: 0x739b63 })
+      );
+      island.rotation.x = -Math.PI / 2;
+      island.scale.set(1.9 + Math.random() * 1.1, 0.5 + Math.random() * 0.22, 1);
+      island.position.set(17000 + Math.random() * 18000, -1.06, -18000 + i * 6200 + (Math.random() - 0.5) * 1800);
+      harborIslands.add(island);
+    }
+    scene.add(harborIslands);
 
     // Cars: static + moving
     const cars = [];
@@ -766,12 +1288,44 @@
     // Clouds (instanced)
     const cloudCount = 220;
     const cloudGeo = new THREE.IcosahedronGeometry(12, 1);
-    const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const cloudMat = new THREE.MeshLambertMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.88,
+      depthWrite: false
+    });
     const clouds = new THREE.InstancedMesh(cloudGeo, cloudMat, cloudCount);
+    const cloudStates = [];
     for (let i = 0; i < cloudCount; i++) {
-      instanceDummy.position.set((Math.random() - 0.5) * 52000, 140 + Math.random() * 900, (Math.random() - 0.5) * 52000);
-      instanceDummy.scale.set(1 + Math.random() * 4.2, 0.6 + Math.random() * 1.6, 1 + Math.random() * 3.4);
-      instanceDummy.rotation.set(Math.random() * 0.2, Math.random() * Math.PI * 2, Math.random() * 0.2);
+      const position = new THREE.Vector3(
+        (Math.random() - 0.5) * 52000,
+        140 + Math.random() * 900,
+        (Math.random() - 0.5) * 52000
+      );
+      const scale = new THREE.Vector3(
+        1 + Math.random() * 4.2,
+        0.6 + Math.random() * 1.6,
+        1 + Math.random() * 3.4
+      );
+      const drift = new THREE.Vector3(
+        3 + Math.random() * 8,
+        0,
+        -1.6 + Math.random() * 3.2
+      );
+      const rotation = new THREE.Euler(
+        Math.random() * 0.2,
+        Math.random() * Math.PI * 2,
+        Math.random() * 0.2
+      );
+      const pulse = {
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.12 + Math.random() * 0.24,
+        amp: 0.04 + Math.random() * 0.08
+      };
+      cloudStates.push({ position, scale, drift, rotation, pulse });
+      instanceDummy.position.copy(position);
+      instanceDummy.scale.copy(scale);
+      instanceDummy.rotation.copy(rotation);
       instanceDummy.updateMatrix();
       clouds.setMatrixAt(i, instanceDummy.matrix);
     }
@@ -795,6 +1349,9 @@
     let joyPointerId = null;
     let throttlePointerId = null;
     let crossedTakeoffAltitude = false;
+    let verticalSpeed = 0;
+    const crashDebris = [];
+    const crashExplosionBursts = [];
 
     // Audio (Web Audio API: stable, no CDN dependency)
     let audioCtx = null;
@@ -883,6 +1440,36 @@
       osc.start();
       osc.stop(audioCtx.currentTime + 0.36);
       log('Takeoff sound played');
+    }
+
+    function playCrashSound() {
+      if (!audioCtx || !masterGain) return;
+      const now = audioCtx.currentTime;
+
+      const boom = audioCtx.createOscillator();
+      boom.type = 'sawtooth';
+      boom.frequency.setValueAtTime(180, now);
+      boom.frequency.exponentialRampToValueAtTime(38, now + 0.55);
+      const boomGain = audioCtx.createGain();
+      boomGain.gain.setValueAtTime(0.0001, now);
+      boomGain.gain.exponentialRampToValueAtTime(0.24, now + 0.02);
+      boomGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.62);
+      boom.connect(boomGain).connect(masterGain);
+      boom.start();
+      boom.stop(now + 0.64);
+
+      const hiss = audioCtx.createBufferSource();
+      hiss.buffer = createNoiseBuffer(audioCtx);
+      const hissFilter = audioCtx.createBiquadFilter();
+      hissFilter.type = 'bandpass';
+      hissFilter.frequency.value = 960;
+      const hissGain = audioCtx.createGain();
+      hissGain.gain.setValueAtTime(0.0001, now);
+      hissGain.gain.exponentialRampToValueAtTime(0.12, now + 0.03);
+      hissGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.44);
+      hiss.connect(hissFilter).connect(hissGain).connect(masterGain);
+      hiss.start();
+      hiss.stop(now + 0.46);
     }
 
     function updateAudio() {
@@ -1003,12 +1590,14 @@
 
     window.startGame = function startGame() {
       if (gameStarted) return;
+      if (crashState.active || crashState.restartReady) resetFlightState();
       log('Starting game');
       gameStarted = true;
       startPending = false;
       landingState = '飞行中';
       if (startScreenEl) startScreenEl.style.display = 'none';
       if (landStatusEl) landStatusEl.textContent = `状态: ${landingState}`;
+      setStartButtonLoadingState(false);
 
       try {
         if (!audioCtx) initAudio();
@@ -1031,20 +1620,29 @@
         event.stopPropagation();
       }
       if (gameStarted || startPending) return;
+      if (planeLoading) {
+        if (startTipEl) startTipEl.textContent = `${planeConfigs[selectedPlaneKey].displayName} 机模加载中，请稍等...`;
+        return;
+      }
       startPending = true;
       if (startTipEl) startTipEl.textContent = '正在起飞...';
       window.startGame();
     }
 
     function bindStartControls() {
+      if (planePickerEl) {
+        planePickerEl.addEventListener('click', (event) => {
+          const optionEl = event.target.closest('[data-plane-choice]');
+          if (!optionEl) return;
+          const nextKey = optionEl.dataset.planeChoice;
+          if (!nextKey || nextKey === selectedPlaneKey) return;
+          loadPlaneByKey(nextKey);
+        });
+      }
       if (startBtnEl) {
         startBtnEl.onclick = triggerStart;
         startBtnEl.addEventListener('pointerup', triggerStart, { passive: false, capture: true });
         startBtnEl.addEventListener('touchend', triggerStart, { passive: false, capture: true });
-      }
-      if (startScreenEl) {
-        startScreenEl.addEventListener('click', triggerStart, { passive: false, capture: true });
-        startScreenEl.addEventListener('pointerup', triggerStart, { passive: false, capture: true });
       }
     }
     bindStartControls();
@@ -1088,6 +1686,275 @@
       return Math.abs(x) <= runwayHalfW && Math.abs(z) <= runwayHalfL;
     }
 
+    function clearCrashDebris() {
+      while (crashDebrisGroup.children.length) {
+        crashDebrisGroup.remove(crashDebrisGroup.children[0]);
+      }
+      crashDebris.length = 0;
+    }
+
+    function clearCrashExplosion() {
+      while (crashExplosionGroup.children.length) {
+        crashExplosionGroup.remove(crashExplosionGroup.children[0]);
+      }
+      crashExplosionBursts.length = 0;
+    }
+
+    function spawnCrashExplosion(origin, intensity) {
+      clearCrashExplosion();
+      const fireMat = new THREE.MeshBasicMaterial({
+        color: 0xffb347,
+        transparent: true,
+        opacity: 0.92,
+        depthWrite: false
+      });
+      const coreMat = new THREE.MeshBasicMaterial({
+        color: 0xfff2c6,
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false
+      });
+      const smokeMat = new THREE.MeshBasicMaterial({
+        color: 0x2f3138,
+        transparent: true,
+        opacity: 0.52,
+        depthWrite: false
+      });
+
+      for (let i = 0; i < 7; i++) {
+        const fireball = new THREE.Mesh(new THREE.IcosahedronGeometry(2.6 + Math.random() * 2.1, 1), i === 0 ? coreMat : fireMat);
+        fireball.position.copy(origin);
+        fireball.position.x += (Math.random() - 0.5) * 8;
+        fireball.position.y += 4 + Math.random() * 6;
+        fireball.position.z += (Math.random() - 0.5) * 8;
+        crashExplosionGroup.add(fireball);
+        crashExplosionBursts.push({
+          mesh: fireball,
+          age: 0,
+          maxAge: 0.42 + Math.random() * 0.24,
+          growth: 26 + Math.random() * 18 + intensity * 0.14,
+          velocity: new THREE.Vector3(
+            (Math.random() - 0.5) * (7 + intensity * 0.11),
+            7 + Math.random() * 10,
+            (Math.random() - 0.5) * (7 + intensity * 0.11)
+          ),
+          drift: 0.982
+        });
+      }
+
+      for (let i = 0; i < 12; i++) {
+        const smoke = new THREE.Mesh(new THREE.SphereGeometry(2.2 + Math.random() * 2.6, 10, 10), smokeMat);
+        smoke.position.copy(origin);
+        smoke.position.x += (Math.random() - 0.5) * 12;
+        smoke.position.y += 3.5 + Math.random() * 8;
+        smoke.position.z += (Math.random() - 0.5) * 12;
+        crashExplosionGroup.add(smoke);
+        crashExplosionBursts.push({
+          mesh: smoke,
+          age: 0,
+          maxAge: 1.3 + Math.random() * 1.0,
+          growth: 7 + Math.random() * 7.4,
+          velocity: new THREE.Vector3(
+            (Math.random() - 0.5) * 6.5,
+            5.8 + Math.random() * 7.2,
+            (Math.random() - 0.5) * 6.5
+          ),
+          drift: 0.978
+        });
+      }
+
+      crashFx.flash = 1;
+      crashFx.shake = Math.max(crashFx.shake, 1);
+      if (crashFlashEl) crashFlashEl.style.opacity = '1';
+    }
+
+    function spawnCrashDebris(origin, headingAngle, intensity) {
+      clearCrashDebris();
+      const mats = [bodyMat, blueAccentMat, yellowAccentMat, engineMat, intakeMat];
+      const debrisCount = 28;
+      for (let i = 0; i < debrisCount; i++) {
+        const piece = new THREE.Mesh(
+          Math.random() < 0.7
+            ? new THREE.BoxGeometry(0.8 + Math.random() * 2.3, 0.28 + Math.random() * 0.95, 0.8 + Math.random() * 3.8)
+            : new THREE.CylinderGeometry(0.18 + Math.random() * 0.62, 0.18 + Math.random() * 0.62, 0.8 + Math.random() * 2.4, 8),
+          mats[i % mats.length]
+        );
+        piece.position.copy(origin);
+        piece.position.x += (Math.random() - 0.5) * 6;
+        piece.position.y += Math.random() * 2.5;
+        piece.position.z += (Math.random() - 0.5) * 6;
+        piece.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+        crashDebrisGroup.add(piece);
+
+        const angle = headingAngle + (Math.random() - 0.5) * 1.8;
+        const burst = intensity * (0.45 + Math.random() * 0.95);
+        crashDebris.push({
+          mesh: piece,
+          velocity: new THREE.Vector3(
+            Math.sin(angle) * burst,
+            8 + Math.random() * 12 + intensity * 0.14,
+            -Math.cos(angle) * burst
+          ),
+          spin: new THREE.Vector3(
+            (Math.random() - 0.5) * 8,
+            (Math.random() - 0.5) * 8,
+            (Math.random() - 0.5) * 8
+          )
+        });
+      }
+    }
+
+    function updateCrashDebris(dt) {
+      for (let i = 0; i < crashDebris.length; i++) {
+        const part = crashDebris[i];
+        part.velocity.y -= 20 * dt;
+        part.mesh.position.addScaledVector(part.velocity, dt);
+        part.mesh.rotation.x += part.spin.x * dt;
+        part.mesh.rotation.y += part.spin.y * dt;
+        part.mesh.rotation.z += part.spin.z * dt;
+        if (part.mesh.position.y < 0.18) {
+          part.mesh.position.y = 0.18;
+          part.velocity.x *= 0.92;
+          part.velocity.z *= 0.92;
+          part.velocity.y *= -0.22;
+          part.spin.multiplyScalar(0.985);
+        }
+      }
+    }
+
+    function updateCrashExplosion(dt) {
+      for (let i = crashExplosionBursts.length - 1; i >= 0; i--) {
+        const burst = crashExplosionBursts[i];
+        burst.age += dt;
+        const t = Math.min(1, burst.age / burst.maxAge);
+        burst.mesh.scale.multiplyScalar(1 + burst.growth * dt * 0.1);
+        burst.mesh.position.addScaledVector(burst.velocity, dt);
+        burst.velocity.multiplyScalar(burst.drift);
+        burst.velocity.y += dt * 2.6;
+        if (burst.mesh.material && 'opacity' in burst.mesh.material) {
+          burst.mesh.material.opacity = Math.max(0, (1 - t) * (burst.mesh.material.color && burst.mesh.material.color.getHex() === 0x2f3138 ? 0.55 : 0.95));
+        }
+        if (t >= 1) {
+          crashExplosionGroup.remove(burst.mesh);
+          crashExplosionBursts.splice(i, 1);
+        }
+      }
+    }
+
+    function resetFlightState() {
+      clearCrashDebris();
+      clearCrashExplosion();
+      crashState.active = false;
+      crashState.reason = '';
+      crashState.timer = 0;
+      crashState.restartReady = false;
+      crashState.focus.set(0, 0, 0);
+      crashFx.flash = 0;
+      crashFx.shake = 0;
+
+      planeVisual.visible = true;
+      planeGroup.position.set(0, 6, runwayLength * 0.44);
+      planeGroup.rotation.set(0, 0, 0);
+
+      speed = 0;
+      pitch = 0;
+      roll = 0;
+      yaw = 0;
+      verticalSpeed = 0;
+      targetThrottle = 0;
+      throttleInput = 0;
+      joyX = 0;
+      joyY = 0;
+      joyTargetX = 0;
+      joyTargetY = 0;
+      joyActive = false;
+      thrActive = false;
+      joyPointerId = null;
+      throttlePointerId = null;
+      roughGroundPhase = 0;
+      takeoffPlayed = false;
+      crossedTakeoffAltitude = false;
+      landingState = '待命';
+      syncThrottleKnob();
+      if (startTipEl) startTipEl.textContent = `${planeConfigs[selectedPlaneKey].displayName} 已就绪，点开始飞行！`;
+      setStartButtonLoadingState(false);
+      if (landStatusEl) landStatusEl.textContent = '状态: 待命';
+      if (crashFlashEl) crashFlashEl.style.opacity = '0';
+    }
+
+    function triggerCrash(reason, visualOrigin = null) {
+      if (crashState.active) return;
+      const crashIntensity = 18 + Math.max(0, speed) * 28 + Math.max(0, -verticalSpeed) * 3.8;
+      const crashOrigin = visualOrigin ? visualOrigin.clone() : planeGroup.position.clone();
+      crashState.active = true;
+      crashState.reason = reason;
+      crashState.timer = 0;
+      crashState.restartReady = false;
+      crashState.focus.copy(crashOrigin);
+      gameStarted = false;
+      startPending = false;
+      landingState = '飞机解体';
+      planeVisual.visible = false;
+      spawnCrashExplosion(crashOrigin, crashIntensity);
+      spawnCrashDebris(crashOrigin, yaw, crashIntensity);
+      speed = 0;
+      targetThrottle = 0;
+      throttleInput = 0;
+      joyX = 0;
+      joyY = 0;
+      joyTargetX = 0;
+      joyTargetY = 0;
+      if (landStatusEl) landStatusEl.textContent = `状态: ${landingState}`;
+      if (startScreenEl) startScreenEl.style.display = 'none';
+      if (startTipEl) startTipEl.textContent = `${reason}，点击重新开始`;
+      setStartButtonLoadingState(false);
+      camera.position.copy(crashState.focus.clone().add(new THREE.Vector3(46, 22, 52)));
+      camera.lookAt(crashState.focus.clone().add(new THREE.Vector3(0, 8, 0)));
+      playCrashSound();
+    }
+
+    function findBuildingImpact(position) {
+      if (position.y > 220) return null;
+      for (let i = 0; i < houseBounds.length; i++) {
+        const house = houseBounds[i];
+        if (Math.abs(position.x - house.x) > house.halfX + PLANE_COLLISION_RADIUS) continue;
+        if (Math.abs(position.z - house.z) > house.halfZ + PLANE_COLLISION_RADIUS) continue;
+        if (position.y > house.height + PLANE_COLLISION_HEIGHT) continue;
+        return house;
+      }
+      return null;
+    }
+
+    function findMountainImpact(position) {
+      for (let i = 0; i < mountainBounds.length; i++) {
+        const mountain = mountainBounds[i];
+        const dx = position.x - mountain.x;
+        const dz = position.z - mountain.z;
+        const sinY = Math.sin(-mountain.rotationY);
+        const cosY = Math.cos(-mountain.rotationY);
+        const localX = dx * cosY - dz * sinY;
+        const localZ = dx * sinY + dz * cosY;
+        const expandedRadiusX = mountain.radiusX + PLANE_COLLISION_RADIUS;
+        const expandedRadiusZ = mountain.radiusZ + PLANE_COLLISION_RADIUS;
+        const radialSq = (localX * localX) / (expandedRadiusX * expandedRadiusX) +
+          (localZ * localZ) / (expandedRadiusZ * expandedRadiusZ);
+        if (radialSq > 1) continue;
+        const radial = Math.sqrt(radialSq);
+        const slopeHeight = THREE.MathUtils.lerp(mountain.peakY, mountain.baseY, Math.min(1, radial));
+        if (position.y > slopeHeight + PLANE_COLLISION_HEIGHT) continue;
+        return {
+          ...mountain,
+          localX,
+          localZ,
+          radial,
+          radialSq,
+          slopeHeight,
+          hitHeight: slopeHeight + PLANE_COLLISION_HEIGHT
+        };
+      }
+      return null;
+    }
+
     function update(dt) {
       applyKeyboardFallback(dt);
       joyX += (joyTargetX - joyX) * Math.min(1, dt * 14);
@@ -1107,6 +1974,7 @@
       }
 
       if (gameStarted) {
+        const prevPlaneY = planeGroup.position.y;
         const pitchInputUp = -joyY;
         speed += (targetThrottle - speed) * dt * 1.9;
         pitch += joyY * dt * 2.4;
@@ -1135,14 +2003,60 @@
           }
         }
         planeGroup.position.y += lift * 24 * dt;
+        verticalSpeed = (planeGroup.position.y - prevPlaneY) / Math.max(dt, 1e-4);
 
         const groundMinY = 1.2;
-        if (planeGroup.position.y < groundMinY) {
-          planeGroup.position.y = groundMinY;
-          pitch = Math.min(0, pitch);
+        const buildingHit = findBuildingImpact(planeGroup.position);
+        if (buildingHit) {
+          const sideX = planeGroup.position.x >= buildingHit.x ? 1 : -1;
+          const sideZ = planeGroup.position.z >= buildingHit.z ? 1 : -1;
+          const visualOrigin = new THREE.Vector3(
+            buildingHit.x + sideX * (buildingHit.halfX + 12),
+            Math.min(buildingHit.height * 0.72, planeGroup.position.y + 10),
+            buildingHit.z + sideZ * (buildingHit.halfZ + 12)
+          );
+          triggerCrash('撞上建筑，飞机解体了', visualOrigin);
+        }
+        const mountainHit = !crashState.active ? findMountainImpact(planeGroup.position) : null;
+        if (mountainHit) {
+          const outwardLocal = new THREE.Vector2(
+            mountainHit.localX / Math.max(mountainHit.radiusX, 1),
+            mountainHit.localZ / Math.max(mountainHit.radiusZ, 1)
+          );
+          if (outwardLocal.lengthSq() < 1e-4) outwardLocal.set(1, 0);
+          outwardLocal.normalize();
+          const surfaceLocalX = outwardLocal.x * mountainHit.radiusX * 0.84;
+          const surfaceLocalZ = outwardLocal.y * mountainHit.radiusZ * 0.84;
+          const sinY = Math.sin(mountainHit.rotationY);
+          const cosY = Math.cos(mountainHit.rotationY);
+          const surfaceWorldX = surfaceLocalX * cosY - surfaceLocalZ * sinY;
+          const surfaceWorldZ = surfaceLocalX * sinY + surfaceLocalZ * cosY;
+          const visualOrigin = new THREE.Vector3(
+            mountainHit.x + surfaceWorldX,
+            Math.min(mountainHit.slopeHeight + 80, planeGroup.position.y + 40),
+            mountainHit.z + surfaceWorldZ
+          );
+          triggerCrash('撞上山体，飞机解体了', visualOrigin);
         }
 
-        if (nearGround) {
+        if (!crashState.active && planeGroup.position.y < groundMinY) {
+          const hardDescent = verticalSpeed < -4.4;
+          const unsafeRoll = Math.abs(roll) > SAFE_LANDING_ROLL;
+          const unsafePitch = Math.abs(pitch) > SAFE_LANDING_PITCH;
+          const runwayTooFast = speed > SAFE_LANDING_SPEED;
+          const unstableRunwayTouchdown = speed > 0.55 && (hardDescent || unsafeRoll || unsafePitch);
+          const shouldCrashOnGround = !onRunway || runwayTooFast || unstableRunwayTouchdown;
+          planeGroup.position.y = groundMinY;
+          if (shouldCrashOnGround) {
+            triggerCrash(onRunway ? '硬着陆坠毁，飞机解体了' : '撞向地面，飞机解体了');
+          } else {
+            pitch = Math.min(0, pitch);
+          }
+        }
+
+        if (crashState.active) {
+          verticalSpeed = 0;
+        } else if (nearGround) {
           if (onRunway) {
             const requestingPower = keys.has('KeyW') || thrActive || throttleInput > 1.0;
             const takeoffRun = requestingPower;
@@ -1174,27 +2088,60 @@
         }
         if (landStatusEl) landStatusEl.textContent = `状态: ${landingState}`;
 
-        if (!takeoffPlayed && speed > 1.2 && planeGroup.position.y > 30) {
+        if (!crashState.active && !takeoffPlayed && speed > 1.2 && planeGroup.position.y > 30) {
           playTakeoffSound();
           crossedTakeoffAltitude = true;
-        } else if (!crossedTakeoffAltitude && planeGroup.position.y > 30) {
+        } else if (!crashState.active && !crossedTakeoffAltitude && planeGroup.position.y > 30) {
           crossedTakeoffAltitude = true;
           playTakeoffSound();
         }
 
-        // World edge wrapping for endless map
-        if (planeGroup.position.x > WORLD_RADIUS) planeGroup.position.x = -WORLD_RADIUS;
-        if (planeGroup.position.x < -WORLD_RADIUS) planeGroup.position.x = WORLD_RADIUS;
-        if (planeGroup.position.z > WORLD_RADIUS) planeGroup.position.z = -WORLD_RADIUS;
-        if (planeGroup.position.z < -WORLD_RADIUS) planeGroup.position.z = WORLD_RADIUS;
+        if (!crashState.active) {
+          // World edge wrapping for endless map
+          if (planeGroup.position.x > WORLD_RADIUS) planeGroup.position.x = -WORLD_RADIUS;
+          if (planeGroup.position.x < -WORLD_RADIUS) planeGroup.position.x = WORLD_RADIUS;
+          if (planeGroup.position.z > WORLD_RADIUS) planeGroup.position.z = -WORLD_RADIUS;
+          if (planeGroup.position.z < -WORLD_RADIUS) planeGroup.position.z = WORLD_RADIUS;
+        }
+      } else {
+        verticalSpeed = 0;
+      }
+
+      if (crashState.active) {
+        crashState.timer += dt;
+        updateCrashDebris(dt);
+        updateCrashExplosion(dt);
+        crashFx.flash = Math.max(0, crashFx.flash - dt * 1.7);
+        crashFx.shake = Math.max(0, crashFx.shake - dt * 1.8);
+        if (crashFlashEl) crashFlashEl.style.opacity = String(Math.min(1, crashFx.flash * 0.95));
+        if (!crashState.restartReady && crashState.timer > 1.15) {
+          crashState.restartReady = true;
+          if (startScreenEl) startScreenEl.style.display = 'flex';
+        }
+      } else {
+        if (crashExplosionBursts.length) updateCrashExplosion(dt);
+        crashFx.flash = Math.max(0, crashFx.flash - dt * 2.4);
+        crashFx.shake = Math.max(0, crashFx.shake - dt * 2.8);
+        if (crashFlashEl) crashFlashEl.style.opacity = String(Math.min(1, crashFx.flash * 0.7));
       }
 
       updateAudio();
 
-      const cameraOffset = new THREE.Vector3(0, 11, 34).applyQuaternion(planeGroup.quaternion);
-      const cameraTarget = planeGroup.position.clone().add(cameraOffset);
-      camera.position.lerp(cameraTarget, 0.1);
-      camera.lookAt(planeGroup.position.clone().add(new THREE.Vector3(0, 2, 0)));
+      const baseFocus = crashState.active ? crashState.focus : planeGroup.position;
+      const nearGroundCameraOffset = new THREE.Vector3(0, 22, 78).applyQuaternion(planeGroup.quaternion);
+      const flightCameraOffset = new THREE.Vector3(0, 11, 34).applyQuaternion(planeGroup.quaternion);
+      const cameraOffset = crashState.active
+        ? new THREE.Vector3(46, 22, 52)
+        : (planeGroup.position.y < 28 ? nearGroundCameraOffset : flightCameraOffset);
+      const cameraTarget = baseFocus.clone().add(cameraOffset);
+      const shakeMagnitude = crashFx.shake * (2.2 + Math.sin((crashState.timer + 1) * 55) * 0.8);
+      const shakeOffset = new THREE.Vector3(
+        (Math.random() - 0.5) * shakeMagnitude,
+        (Math.random() - 0.5) * shakeMagnitude * 0.6,
+        (Math.random() - 0.5) * shakeMagnitude
+      );
+      camera.position.lerp(cameraTarget.clone().add(shakeOffset), 0.1);
+      camera.lookAt(baseFocus.clone().add(new THREE.Vector3(shakeOffset.x * 0.25, crashState.active ? 9 + shakeOffset.y * 0.2 : 2 + shakeOffset.y * 0.2, shakeOffset.z * 0.25)));
 
       altEl.textContent = String(Math.max(0, Math.floor(planeGroup.position.y * 10)));
       spdEl.textContent = String(Math.max(0, Math.floor(speed * 320)));
@@ -1244,6 +2191,9 @@
         worldRadius: WORLD_RADIUS,
         fullscreen: Boolean(document.fullscreenElement),
         plane: {
+          selectedKey: selectedPlaneKey,
+          activeKey: activePlaneKey,
+          selectedName: planeConfigs[selectedPlaneKey].displayName,
           modelSource: planeModelSource,
           x: Number(planeGroup.position.x.toFixed(1)),
           y: Number(planeGroup.position.y.toFixed(1)),
@@ -1272,12 +2222,66 @@
           windHz: windFilter ? Number(windFilter.frequency.value.toFixed(2)) : 0,
           windGain: windGain ? Number(windGain.gain.value.toFixed(4)) : 0
         },
+        crash: {
+          active: crashState.active,
+          reason: crashState.reason,
+          restartReady: crashState.restartReady,
+          timer: Number(crashState.timer.toFixed(2)),
+          debrisCount: crashDebris.length,
+          verticalSpeed: Number(verticalSpeed.toFixed(2)),
+          flash: Number(crashFx.flash.toFixed(2)),
+          shake: Number(crashFx.shake.toFixed(2)),
+          explosionCount: crashExplosionBursts.length
+        },
         modelLoading: {
+          pendingPlaneKey: selectedPlaneKey,
+          loading: planeLoading,
           visible: Boolean(modelLoadingEl && modelLoadingEl.classList.contains('show')),
           text: modelLoadingEl ? modelLoadingEl.textContent : ''
         }
       };
       return JSON.stringify(payload);
+    };
+
+    window.__debugFlight = {
+      resetFlightState,
+      setPlaneState(next = {}) {
+        if (typeof next.x === 'number') planeGroup.position.x = next.x;
+        if (typeof next.y === 'number') planeGroup.position.y = next.y;
+        if (typeof next.z === 'number') planeGroup.position.z = next.z;
+        if (typeof next.pitch === 'number') pitch = next.pitch;
+        if (typeof next.roll === 'number') roll = next.roll;
+        if (typeof next.yaw === 'number') yaw = next.yaw;
+        if (typeof next.speed === 'number') speed = next.speed;
+        if (typeof next.throttle === 'number') {
+          throttleInput = next.throttle;
+          targetThrottle = next.throttle;
+          syncThrottleKnob();
+        }
+      },
+      nearestBuilding() {
+        const hit = findBuildingImpact(planeGroup.position);
+        return hit ? { ...hit } : null;
+      },
+      sampleBuilding(index = 0) {
+        const house = houseBounds[((index % houseBounds.length) + houseBounds.length) % houseBounds.length];
+        return house ? { ...house } : null;
+      },
+      sampleMountain(index = 0) {
+        const mountain = mountainBounds[((index % mountainBounds.length) + mountainBounds.length) % mountainBounds.length];
+        return mountain ? { ...mountain } : null;
+      },
+      isPlaneLoading() {
+        return planeLoading;
+      },
+      async selectPlane(key) {
+        await loadPlaneByKey(key);
+        return {
+          selectedKey: selectedPlaneKey,
+          activeKey: activePlaneKey,
+          modelSource: planeModelSource
+        };
+      }
     };
 
     window.addEventListener('resize', () => {

@@ -435,14 +435,17 @@ console.error('[PlaneGame] Global error:', e.error);
     let propRoot = null;
     let planeModelSource = 'procedural';
 
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xf8fbff, roughness: 0.46, metalness: 0.12 });
-    const blueAccentMat = new THREE.MeshStandardMaterial({ color: 0x2f73b7, roughness: 0.4, metalness: 0.11 });
-    const yellowAccentMat = new THREE.MeshStandardMaterial({ color: 0xf2c53d, roughness: 0.42, metalness: 0.08 });
-    const engineMat = new THREE.MeshStandardMaterial({ color: 0xd4dce8, roughness: 0.36, metalness: 0.2 });
-    const intakeMat = new THREE.MeshStandardMaterial({ color: 0x203348, roughness: 0.55, metalness: 0.1 });
-    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1a1d22, roughness: 0.86, metalness: 0.02 });
-    const strutMat = new THREE.MeshStandardMaterial({ color: 0xa6afbd, roughness: 0.35, metalness: 0.45 });
-    const windowMat = new THREE.MeshStandardMaterial({ color: 0x7fb4de, roughness: 0.2, metalness: 0.5 });
+const bodyMat = new THREE.MeshStandardMaterial({ color: 0xf8fbff, roughness: 0.46, metalness: 0.12 });
+const blueAccentMat = new THREE.MeshStandardMaterial({ color: 0x2f73b7, roughness: 0.4, metalness: 0.11 });
+const yellowAccentMat = new THREE.MeshStandardMaterial({ color: 0xf2c53d, roughness: 0.42, metalness: 0.08 });
+const engineMat = new THREE.MeshStandardMaterial({ color: 0xd4dce8, roughness: 0.36, metalness: 0.2 });
+const intakeMat = new THREE.MeshStandardMaterial({ color: 0x203348, roughness: 0.55, metalness: 0.1 });
+const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1a1d22, roughness: 0.86, metalness: 0.02 });
+const strutMat = new THREE.MeshStandardMaterial({ color: 0xa6afbd, roughness: 0.35, metalness: 0.45 });
+const windowMat = new THREE.MeshStandardMaterial({ color: 0x7fb4de, roughness: 0.2, metalness: 0.5 });
+const noseMat = new THREE.MeshStandardMaterial({ color: 0x4a6fa5, roughness: 0.35, metalness: 0.15 });
+const darkStripeMat = new THREE.MeshStandardMaterial({ color: 0x1a3a5c, roughness: 0.4, metalness: 0.1 });
+const redStripeMat = new THREE.MeshStandardMaterial({ color: 0xc41e3a, roughness: 0.35, metalness: 0.08 });
 
     function setModelLoading(text, visible = true) {
       if (!modelLoadingEl) return;
@@ -459,66 +462,82 @@ console.error('[PlaneGame] Global error:', e.error);
       root.add(b);
     }
 
-    function buildProceduralAn225(root) {
-      root.clear();
+function buildProceduralAn225(root) {
+root.clear();
 
-      const fuselageProfile = [
-        [0.06, -18.8],
-        [1.5, -17.2],
-        [2.55, -13.8],
-        [3.05, -8.6],
-        [3.25, -1.5],
-        [3.05, 9.8],
-        [2.55, 16.8],
-        [1.15, 21.2],
-        [0.08, 23.4]
-      ];
-      const lathePts = fuselageProfile.map(([r, y]) => new THREE.Vector2(r, y));
-      const fuselageGeo = new THREE.LatheGeometry(lathePts, 42);
-      fuselageGeo.rotateX(Math.PI / 2);
-      const fuselage = new THREE.Mesh(fuselageGeo, bodyMat);
-      root.add(fuselage);
+// An-225 custom livery materials (different from A380 white)
+const an225BodyMat = new THREE.MeshStandardMaterial({ color: 0x3a7ca5, roughness: 0.42, metalness: 0.14 });
+const orangeAccentMat = new THREE.MeshStandardMaterial({ color: 0xff6b35, roughness: 0.38, metalness: 0.1 });
+const greenAccentMat = new THREE.MeshStandardMaterial({ color: 0x2ecc71, roughness: 0.4, metalness: 0.08 });
+const darkGrayMat = new THREE.MeshStandardMaterial({ color: 0x34495e, roughness: 0.45, metalness: 0.15 });
 
-      const noseBulgeGeo = new THREE.SphereGeometry(2.4, 26, 20);
-      noseBulgeGeo.scale(1.02, 0.84, 1.1);
-      noseBulgeGeo.translate(0, 0.44, -15.9);
-      root.add(new THREE.Mesh(noseBulgeGeo, bodyMat));
+const fuselageProfile = [
+  [0.06, -18.8],
+  [1.5, -17.2],
+  [2.55, -13.8],
+  [3.05, -8.6],
+  [3.25, -1.5],
+  [3.05, 9.8],
+  [2.55, 16.8],
+  [1.15, 21.2],
+  [0.08, 23.4]
+];
+const lathePts = fuselageProfile.map(([r, y]) => new THREE.Vector2(r, y));
+const fuselageGeo = new THREE.LatheGeometry(lathePts, 42);
+fuselageGeo.rotateX(Math.PI / 2);
+const fuselage = new THREE.Mesh(fuselageGeo, an225BodyMat);
+root.add(fuselage);
 
-      const humpGeo = typeof THREE.CapsuleGeometry === 'function'
-        ? new THREE.CapsuleGeometry(1, 4, 10, 18)
-        : new THREE.CylinderGeometry(1.08, 0.94, 6.2, 22);
-      humpGeo.rotateX(Math.PI / 2);
-      humpGeo.translate(0, 1.94, -9.3);
-      root.add(new THREE.Mesh(humpGeo, bodyMat));
+// Belly stripe (orange)
+const bellyStripe = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.25, 38), orangeAccentMat);
+bellyStripe.position.set(0, -0.6, 0);
+root.add(bellyStripe);
 
-      const cockpitGlassGeo = new THREE.SphereGeometry(1.74, 24, 18);
-      cockpitGlassGeo.scale(1, 0.5, 1.42);
-      cockpitGlassGeo.translate(0, 2.35, -12.2);
-      root.add(new THREE.Mesh(cockpitGlassGeo, windowMat));
+// Upper fuselage stripe (blue)
+const upperStripe = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.2, 32), blueAccentMat);
+upperStripe.position.set(0, 2.1, 2);
+root.add(upperStripe);
+
+const noseBulgeGeo = new THREE.SphereGeometry(2.4, 26, 20);
+noseBulgeGeo.scale(1.02, 0.84, 1.1);
+noseBulgeGeo.translate(0, 0.44, -15.9);
+root.add(new THREE.Mesh(noseBulgeGeo, noseMat));
+
+const humpGeo = typeof THREE.CapsuleGeometry === 'function'
+  ? new THREE.CapsuleGeometry(1, 4, 10, 18)
+  : new THREE.CylinderGeometry(1.08, 0.94, 6.2, 22);
+humpGeo.rotateX(Math.PI / 2);
+humpGeo.translate(0, 1.94, -9.3);
+root.add(new THREE.Mesh(humpGeo, an225BodyMat));
+
+const cockpitGlassGeo = new THREE.SphereGeometry(1.74, 24, 18);
+cockpitGlassGeo.scale(1, 0.5, 1.42);
+cockpitGlassGeo.translate(0, 2.35, -12.2);
+root.add(new THREE.Mesh(cockpitGlassGeo, windowMat));
 
       // High wing with slight anhedral via segmented wing panels
-      const centerWing = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.5, 5.1), bodyMat);
+      const centerWing = new THREE.Mesh(new THREE.BoxGeometry(9.6, 0.5, 5.1), darkGrayMat);
       centerWing.position.set(0, 1.74, -1.6);
       root.add(centerWing);
       for (const side of [-1, 1]) {
-        const wingInner = new THREE.Mesh(new THREE.BoxGeometry(8.7, 0.42, 4.9), bodyMat);
+        const wingInner = new THREE.Mesh(new THREE.BoxGeometry(8.7, 0.42, 4.9), darkGrayMat);
         wingInner.position.set(side * 9, 1.62, -1.4);
         wingInner.rotation.z = side * 0.055;
         root.add(wingInner);
 
-        const wingOuter = new THREE.Mesh(new THREE.BoxGeometry(9.2, 0.34, 4.1), bodyMat);
+        const wingOuter = new THREE.Mesh(new THREE.BoxGeometry(9.2, 0.34, 4.1), darkGrayMat);
         wingOuter.position.set(side * 17.3, 1.28, -1.1);
         wingOuter.rotation.z = side * 0.11;
         root.add(wingOuter);
 
-        const wingTip = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.26, 3.4), bodyMat);
+        const wingTip = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.26, 3.4), greenAccentMat);
         wingTip.position.set(side * 22.4, 0.96, -0.8);
         wingTip.rotation.z = side * 0.14;
         root.add(wingTip);
       }
 
       // Tailplanes and twin fins
-      const tailPlane = new THREE.Mesh(new THREE.BoxGeometry(13.4, 0.32, 3.15), bodyMat);
+      const tailPlane = new THREE.Mesh(new THREE.BoxGeometry(13.4, 0.32, 3.15), orangeAccentMat);
       tailPlane.position.set(0, 2.4, 11.2);
       root.add(tailPlane);
 
@@ -530,6 +549,20 @@ console.error('[PlaneGame] Global error:', e.error);
       finRight.position.x = 4.8;
       root.add(finRight);
 
+      // Ukrainian flag stripe on fins (blue and yellow)
+      const finStripeBlue = new THREE.Mesh(new THREE.BoxGeometry(0.48, 2.1, 2.8), blueAccentMat);
+      finStripeBlue.position.set(-4.8, 6.2, 12.2);
+      root.add(finStripeBlue);
+      const finStripeYellow = new THREE.Mesh(new THREE.BoxGeometry(0.48, 2.1, 2.8), yellowAccentMat);
+      finStripeYellow.position.set(-4.8, 4.1, 12.2);
+      root.add(finStripeYellow);
+      const finStripeBlue2 = finStripeBlue.clone();
+      finStripeBlue2.position.x = 4.8;
+      root.add(finStripeBlue2);
+      const finStripeYellow2 = finStripeYellow.clone();
+      finStripeYellow2.position.x = 4.8;
+      root.add(finStripeYellow2);
+
       // White-blue-yellow livery stripes
       const stripeBlue = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.18, 26.5), blueAccentMat);
       stripeBlue.position.set(1.96, 0.95, -1.2);
@@ -539,12 +572,22 @@ console.error('[PlaneGame] Global error:', e.error);
       stripeYellow.position.set(1.62, 0.74, -1.1);
       addMirror(root, stripeYellow, 1.62);
 
+      // Additional orange accent stripes
+      const stripeOrange = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.14, 18), orangeAccentMat);
+      stripeOrange.position.set(1.78, 0.5, 2);
+      addMirror(root, stripeOrange, 1.78);
+
+      // Green stripe near tail
+      const stripeGreen = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.16, 12), greenAccentMat);
+      stripeGreen.position.set(1.85, 0.85, 8);
+      addMirror(root, stripeGreen, 1.85);
+
       // Six engines with pylons and fan discs
       const engineStations = [6.2, 10.4, 14.8];
       for (const sx of engineStations) {
         for (const side of [-1, 1]) {
           const x = side * sx;
-          const pylon = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.75, 1.5), bodyMat);
+          const pylon = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.75, 1.5), an225BodyMat);
           pylon.position.set(x, 0.9, -1.6);
           root.add(pylon);
 
@@ -699,6 +742,19 @@ console.error('[PlaneGame] Global error:', e.error);
         if (!child.isMesh) return;
         child.castShadow = false;
         child.receiveShadow = false;
+        
+        // Apply blue tint to An-225 GLB model
+        if (config.key === 'an225' && child.material) {
+          const mat = child.material;
+          if (mat.color) {
+            const hsl = {};
+            mat.color.getHSL(hsl);
+            // Only tint white/light colored parts (not windows, dark parts, etc)
+            if (hsl.l > 0.5 && hsl.s < 0.3) {
+              mat.color.setHSL(0.56, 0.55, 0.48);
+            }
+          }
+        }
       });
       return prepared;
     }

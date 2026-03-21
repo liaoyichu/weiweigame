@@ -1,0 +1,24 @@
+name: Deploy to Local Machine
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Deploy to local server
+        run: |
+          # 停止旧服务
+          pkill -f "python3 server.py" || true
+          
+          # 启动新服务
+          cd ${{ github.workspace }}
+          nohup python3 server.py > /tmp/weiweigame.log 2>&1 &
+          
+          echo "Game deployed at: http://localhost:8080"

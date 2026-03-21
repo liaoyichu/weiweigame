@@ -1,24 +1,36 @@
-name: Deploy to Local Machine
+name: Deploy to GitHub Pages
 
 on:
   push:
     branches: [ master ]
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   deploy:
-    runs-on: self-hosted
-    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
         
-      - name: Deploy to local server
-        run: |
-          # 停止旧服务
-          pkill -f "python3 server.py" || true
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
           
-          # 启动新服务
-          cd ${{ github.workspace }}
-          nohup python3 server.py > /tmp/weiweigame.log 2>&1 &
-          
-          echo "Game deployed at: http://localhost:8080"
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

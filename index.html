@@ -316,6 +316,14 @@
         <strong>An-225 梦想号</strong>
         <span>真实 3D 货运巨机模型，六发、双垂尾、高置机翼。</span>
       </button>
+      <button class="plane-option" type="button" data-plane-choice="b747" aria-pressed="false">
+        <strong>B747-8</strong>
+        <span>经典四发宽体客机，二层驼背造型，蓝白涂装。</span>
+      </button>
+      <button class="plane-option" type="button" data-plane-choice="a330" aria-pressed="false">
+        <strong>A330-300</strong>
+        <span>优雅双发宽体客机，细长机身，绿白涂装。</span>
+      </button>
     </div>
     <p style="font-size: 15px; opacity: 0.92;">左边油门加速，右边摇杆控制方向</p>
     <button id="start-btn" type="button">开始飞行</button>
@@ -658,6 +666,202 @@ root.add(new THREE.Mesh(cockpitGlassGeo, windowMat));
       root.add(propRoot);
     }
 
+    // Parametric wide-body airliner builder for B747-8 / A330-300.
+    // All dimensions are scaled relative to the procedural An-225 (len 42.2u, span 44.8u)
+    // so every aircraft keeps correct real-world proportions.
+    function buildProceduralWidebody(root, o) {
+      root.clear();
+      const bodyMat = new THREE.MeshStandardMaterial({ color: o.body, roughness: 0.44, metalness: 0.12 });
+      const accentMat = new THREE.MeshStandardMaterial({ color: o.accent, roughness: 0.4, metalness: 0.1 });
+      const accent2Mat = new THREE.MeshStandardMaterial({ color: o.accent2, roughness: 0.42, metalness: 0.08 });
+      const darkMat = new THREE.MeshStandardMaterial({ color: 0x34495e, roughness: 0.45, metalness: 0.15 });
+      const ls = o.lenScale;
+      const ss = o.spanScale;
+      const bs = o.bodyScale;
+
+      const fusProfile = [
+        [0.06 * bs, -18.8 * ls],
+        [1.5 * bs, -17.2 * ls],
+        [2.55 * bs, -13.8 * ls],
+        [3.05 * bs, -8.6 * ls],
+        [3.25 * bs, -1.5 * ls],
+        [3.05 * bs, 9.8 * ls],
+        [2.55 * bs, 16.8 * ls],
+        [1.15 * bs, 21.2 * ls],
+        [0.08 * bs, 23.4 * ls]
+      ];
+      const fusGeo = new THREE.LatheGeometry(fusProfile.map(([r, y]) => new THREE.Vector2(r, y)), 42);
+      fusGeo.rotateX(Math.PI / 2);
+      root.add(new THREE.Mesh(fusGeo, bodyMat));
+
+      const bellyStripe = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.22, 37 * ls), accentMat);
+      bellyStripe.position.set(0, -0.55, 0);
+      root.add(bellyStripe);
+      const upperStripe = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.18, 30 * ls), accent2Mat);
+      upperStripe.position.set(0, 1.95, 2);
+      root.add(upperStripe);
+
+      const glassGeo = new THREE.SphereGeometry(1.74 * bs, 24, 18);
+      glassGeo.scale(1, 0.5, 1.42);
+      glassGeo.translate(0, 2.3 * bs, -12.2 * ls);
+      root.add(new THREE.Mesh(glassGeo, windowMat));
+
+      if (o.hump) {
+        const humpGeo = typeof THREE.CapsuleGeometry === 'function'
+          ? new THREE.CapsuleGeometry(1.05 * bs, 4.5 * ls, 10, 18)
+          : new THREE.CylinderGeometry(1.1 * bs, 0.95 * bs, 6.2 * ls, 22);
+        humpGeo.rotateX(Math.PI / 2);
+        humpGeo.translate(0, 1.9 * bs, -10.5 * ls);
+        root.add(new THREE.Mesh(humpGeo, bodyMat));
+        for (let i = 0; i < 5; i++) {
+          const z = -12.6 * ls + i * 0.9 * ls;
+          for (const side of [-1, 1]) {
+            const win = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.32), windowMat);
+            win.position.set(side * 1.02 * bs, 2.5 * bs, z);
+            root.add(win);
+          }
+        }
+      }
+
+      const centerWing = new THREE.Mesh(new THREE.BoxGeometry(9.6 * ss, 0.5, 5.1 * ls), darkMat);
+      centerWing.position.set(0, 1.6, -1.6 * ls);
+      root.add(centerWing);
+      for (const side of [-1, 1]) {
+        const wingInner = new THREE.Mesh(new THREE.BoxGeometry(8.7 * ss, 0.42, 4.9 * ls), darkMat);
+        wingInner.position.set(side * 9 * ss, 1.5, -1.4 * ls);
+        wingInner.rotation.z = side * 0.055;
+        root.add(wingInner);
+
+        const wingOuter = new THREE.Mesh(new THREE.BoxGeometry(9.2 * ss, 0.34, 4.1 * ls), darkMat);
+        wingOuter.position.set(side * 17.3 * ss, 1.2, -1.1 * ls + o.sweep);
+        wingOuter.rotation.z = side * 0.11;
+        root.add(wingOuter);
+
+        const wingTip = new THREE.Mesh(new THREE.BoxGeometry(3.4 * ss, 0.26, 3.4 * ls), accentMat);
+        wingTip.position.set(side * 22.4 * ss, 0.92, -0.8 * ls + o.sweep * 1.35);
+        wingTip.rotation.z = side * 0.14;
+        root.add(wingTip);
+      }
+
+      const tailPlane = new THREE.Mesh(new THREE.BoxGeometry(13.4 * ss * 0.55, 0.32, 3.15 * ls), accentMat);
+      tailPlane.position.set(0, 2.3, 11.2 * ls);
+      root.add(tailPlane);
+
+      const finGeo = new THREE.BoxGeometry(0.42, o.finHeight, 2.75 * ls);
+      const fin = new THREE.Mesh(finGeo, bodyMat);
+      fin.position.set(0, o.finY, 12.2 * ls);
+      root.add(fin);
+      const finStripe = new THREE.Mesh(new THREE.BoxGeometry(0.48, o.finHeight * 0.62, 2.3 * ls), accentMat);
+      finStripe.position.set(0, o.finY + o.finHeight * 0.14, 12.2 * ls);
+      root.add(finStripe);
+
+      for (const t of o.engineTs) {
+        for (const side of [-1, 1]) {
+          const x = side * t * (22.4 * ss);
+          const z = -1.5 * ls + (1 - t) * -0.8 * ls + (t > 0.6 ? o.sweep * 0.6 : 0);
+          const pylon = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 1.4), bodyMat);
+          pylon.position.set(x, 0.9, z);
+          root.add(pylon);
+
+          const nacelle = new THREE.Mesh(new THREE.CylinderGeometry(0.88 * bs, 0.72 * bs, 4 * ls, 22), engineMat);
+          nacelle.rotation.x = Math.PI / 2;
+          nacelle.position.set(x, 0.28, z - 0.1);
+          root.add(nacelle);
+
+          const intake = new THREE.Mesh(new THREE.CylinderGeometry(0.7 * bs, 0.7 * bs, 0.3, 20), intakeMat);
+          intake.rotation.x = Math.PI / 2;
+          intake.position.set(x, 0.28, z - 2.1);
+          root.add(intake);
+
+          const fan = new THREE.Mesh(new THREE.CircleGeometry(0.62 * bs, 18), new THREE.MeshBasicMaterial({ color: 0x364b60 }));
+          fan.position.set(x, 0.28, z - 2.25);
+          root.add(fan);
+        }
+      }
+
+      const winCount = o.hump ? 10 : 11;
+      for (let i = 0; i < winCount; i++) {
+        const z = -12 * ls + i * 1.15 * ls;
+        for (const side of [-1, 1]) {
+          const win = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.17, 0.34), windowMat);
+          win.position.set(side * 1.9 * bs, 1.6, z);
+          root.add(win);
+        }
+      }
+
+      const noseStrut = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 1.2, 10), strutMat);
+      noseStrut.position.set(0, -0.95, -11.7 * ls);
+      root.add(noseStrut);
+      for (const side of [-1, 1]) {
+        const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.09, 8, 14), wheelMat);
+        wheel.rotation.y = Math.PI / 2;
+        wheel.position.set(side * 0.32, -1.55, -11.7 * ls);
+        root.add(wheel);
+      }
+      const bodyGearZ = [2.2, 5.1, 8.2];
+      for (const z of bodyGearZ) {
+        for (const side of [-1, 1]) {
+          const xBase = side * 2.3 * bs;
+          const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 1.5, 10), strutMat);
+          strut.position.set(xBase, -1.1, z * ls);
+          root.add(strut);
+          for (let i = -1; i <= 1; i++) {
+            const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.085, 8, 14), wheelMat);
+            wheel.rotation.y = Math.PI / 2;
+            wheel.position.set(xBase + i * 0.3, -1.85, z * ls);
+            root.add(wheel);
+          }
+        }
+      }
+
+      propRoot = new THREE.Group();
+      propRoot.position.set(0, 0.3, -18.3 * ls);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.5, 12), strutMat);
+      hub.rotation.x = Math.PI / 2;
+      propRoot.add(hub);
+      const bladeMat = new THREE.MeshStandardMaterial({ color: 0x2a3441, roughness: 0.5, metalness: 0.1 });
+      const bladeA = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.05, 2.8 * bs), bladeMat);
+      const bladeB = bladeA.clone();
+      bladeB.rotation.y = Math.PI / 2;
+      propRoot.add(bladeA, bladeB);
+      root.add(propRoot);
+    }
+
+    // Real proportions vs An-225 (len 84m, span 88.4m):
+    // B747-8: len 76.3m (0.908), span 68.4m (0.774), fuse 6.5m (0.72)
+    function buildProceduralB747(root) {
+      buildProceduralWidebody(root, {
+        lenScale: 0.908,
+        spanScale: 0.774,
+        bodyScale: 0.72,
+        body: 0xf2f6fa,
+        accent: 0x2f73b7,
+        accent2: 0x1a3a5c,
+        hump: true,
+        engineTs: [0.42, 0.72],
+        finHeight: 6.2,
+        finY: 5.4,
+        sweep: 2.6
+      });
+    }
+
+    // A330-300: len 63.7m (0.758), span 60.3m (0.682), fuse 5.6m (0.62)
+    function buildProceduralA330(root) {
+      buildProceduralWidebody(root, {
+        lenScale: 0.758,
+        spanScale: 0.682,
+        bodyScale: 0.62,
+        body: 0xffffff,
+        accent: 0x1f9e6b,
+        accent2: 0x0d5c8f,
+        hump: false,
+        engineTs: [0.45],
+        finHeight: 4.9,
+        finY: 4.25,
+        sweep: 1.6
+      });
+    }
+
     const planeConfigs = {
       a380: {
         key: 'a380',
@@ -686,6 +890,34 @@ root.add(new THREE.Mesh(cockpitGlassGeo, windowMat));
         fallbackText: 'An-225 机模加载失败，已回退程序化版本',
         fallbackBuilder: buildProceduralAn225,
         fallbackSource: 'procedural_an225'
+      },
+      b747: {
+        key: 'b747',
+        displayName: 'B747-8',
+        url: 'assets/b747.glb',
+        targetHorizontal: 24,
+        scaleClamp: [0.05, 7.5],
+        rotationY: 0,
+        offsetY: 0.7,
+        offsetZ: 0,
+        successText: '已加载真实 3D 机模 (B747-8)',
+        fallbackText: 'B747-8 机模加载失败，已回退程序化版本',
+        fallbackBuilder: buildProceduralB747,
+        fallbackSource: 'procedural_b747'
+      },
+      a330: {
+        key: 'a330',
+        displayName: 'A330-300',
+        url: 'assets/a330.glb',
+        targetHorizontal: 21.2,
+        scaleClamp: [0.05, 7.5],
+        rotationY: 0,
+        offsetY: 0.7,
+        offsetZ: 0,
+        successText: '已加载真实 3D 机模 (A330-300)',
+        fallbackText: 'A330-300 机模加载失败，已回退程序化版本',
+        fallbackBuilder: buildProceduralA330,
+        fallbackSource: 'procedural_a330'
       }
     };
     let selectedPlaneKey = 'a380';
@@ -806,11 +1038,34 @@ function loadPlaneTemplate(config, onProgress) {
       planeModelSource = source;
     }
 
+    function normalizeFallbackScale(root, config) {
+      root.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(root);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const horizontal = Math.max(size.x, size.z) || 1;
+      const minScale = config.scaleClamp ? config.scaleClamp[0] : 0.05;
+      const maxScale = config.scaleClamp ? config.scaleClamp[1] : 7.5;
+      const scale = THREE.MathUtils.clamp((config.targetHorizontal || 28) / horizontal, minScale, maxScale);
+      root.scale.setScalar(scale);
+      root.updateMatrixWorld(true);
+      const boxScaled = new THREE.Box3().setFromObject(root);
+      const centerScaled = new THREE.Vector3();
+      boxScaled.getCenter(centerScaled);
+      root.position.sub(centerScaled);
+      root.updateMatrixWorld(true);
+      const boxCentered = new THREE.Box3().setFromObject(root);
+      root.position.y -= boxCentered.min.y;
+      root.position.y += config.offsetY || 0;
+      root.position.z += config.offsetZ || 0;
+    }
+
     function mountPlaneFallback(config) {
       planeVisual.clear();
       propRoot = null;
       (config.fallbackBuilder || buildProceduralAn225)(planeVisual);
       planeModelSource = config.fallbackSource || 'procedural';
+      normalizeFallbackScale(planeVisual, config);
     }
 
     async function loadPlaneByKey(planeKey) {
@@ -827,6 +1082,19 @@ function loadPlaneTemplate(config, onProgress) {
       }
 
       try {
+        if (config.fallbackOnly) {
+          if (token !== planeLoadToken) return false;
+          mountPlaneFallback(config);
+          activePlaneKey = config.key;
+          setModelLoading(config.successText, true);
+          setTimeout(() => {
+            if (token === planeLoadToken) setModelLoading('', false);
+          }, 1200);
+          if (startTipEl && !gameStarted && !crashState.active) {
+            startTipEl.textContent = `${config.displayName} 已就绪，点开始飞行！`;
+          }
+          return true;
+        }
         log('Calling loadPlaneTemplate for', config.key);
         const modelInstance = await loadPlaneTemplate(config, (percent) => {
           if (token !== planeLoadToken) return;
@@ -915,7 +1183,7 @@ if (!THREE.GLTFLoader) {
     scene.add(crashDebrisGroup);
     const crashExplosionGroup = new THREE.Group();
     scene.add(crashExplosionGroup);
-    const runwayLength = 22000;
+    const runwayLength = 11000;
     const runwayWidth = 1200;
     const runwayHalfW = runwayWidth * 0.5;
     const runwayHalfL = runwayLength * 0.5;
@@ -1451,6 +1719,251 @@ if (!THREE.GLTFLoader) {
     clouds.instanceMatrix.needsUpdate = true;
     clouds.frustumCulled = false;
     scene.add(clouds);
+
+    // ===== Airport infrastructure =====
+    const terminalSpineMat = new THREE.MeshLambertMaterial({ color: 0xbfc9d2 });
+    const terminalGlassMat = new THREE.MeshLambertMaterial({ color: 0x9fc4dd, transparent: true, opacity: 0.85 });
+    const terminalRoofMat = new THREE.MeshLambertMaterial({ color: 0x5d7d99 });
+    const hangarMat = new THREE.MeshLambertMaterial({ color: 0x8a97a3 });
+
+    function buildTerminal(x, z, len) {
+      const spine = new THREE.Mesh(new THREE.BoxGeometry(160, 78, len), terminalSpineMat);
+      spine.position.set(x, 39, z);
+      scene.add(spine);
+      const glass = new THREE.Mesh(new THREE.BoxGeometry(170, 74, len * 0.96), terminalGlassMat);
+      glass.position.set(x, 37, z);
+      scene.add(glass);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(184, 6, len * 1.04), terminalRoofMat);
+      roof.position.set(x, 79, z);
+      scene.add(roof);
+      houseBounds.push({ x, z, halfX: 90, halfZ: len * 0.5, height: 82 });
+    }
+
+    function buildJetway(x, z, side) {
+      const j = new THREE.Mesh(new THREE.BoxGeometry(120, 26, 300), terminalSpineMat);
+      j.position.set(x + side * 70, 24, z);
+      scene.add(j);
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(110, 8, 280), hangarMat);
+      foot.position.set(x + side * 70, 5, z);
+      scene.add(foot);
+    }
+
+    buildTerminal(-1050, 1600, 2600);
+    buildTerminal(1050, -1600, 2600);
+    for (const z of [0, -600, -1200, -1800, -2400]) buildJetway(-1050, z, 1);
+    for (const z of [0, 600, 1200, 1800, 2400]) buildJetway(1050, z, -1);
+
+    const towerShaft = new THREE.Mesh(new THREE.CylinderGeometry(22, 30, 150, 12), terminalSpineMat);
+    towerShaft.position.set(760, 75, 4750);
+    scene.add(towerShaft);
+    const towerCabin = new THREE.Mesh(new THREE.BoxGeometry(58, 16, 58), terminalGlassMat);
+    towerCabin.position.set(760, 160, 4750);
+    scene.add(towerCabin);
+    const towerRoof = new THREE.Mesh(new THREE.ConeGeometry(38, 20, 4), terminalRoofMat);
+    towerRoof.position.set(760, 178, 4750);
+    towerRoof.rotation.y = Math.PI / 4;
+    scene.add(towerRoof);
+    houseBounds.push({ x: 760, z: 4750, halfX: 34, halfZ: 34, height: 165 });
+
+    function buildHangar(x, z, w, h) {
+      const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, 220), hangarMat);
+      box.position.set(x, h / 2, z);
+      scene.add(box);
+      const door = new THREE.Mesh(new THREE.BoxGeometry(w * 0.7, h * 0.82, 12), terminalSpineMat);
+      door.position.set(x, h * 0.41, z - 110);
+      scene.add(door);
+      houseBounds.push({ x, z, halfX: w / 2, halfZ: 110, height: h });
+    }
+    buildHangar(-680, -4600, 320, 120);
+    buildHangar(-680, -3700, 320, 120);
+
+    function makeRunwayNumberTexture(text) {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 512;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 300px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 128, 256);
+      return new THREE.CanvasTexture(c);
+    }
+    const numMat36 = new THREE.MeshLambertMaterial({ map: makeRunwayNumberTexture('36'), transparent: true, depthWrite: false });
+    const numMat18 = new THREE.MeshLambertMaterial({ map: makeRunwayNumberTexture('18'), transparent: true, depthWrite: false });
+    const num36 = new THREE.Mesh(new THREE.PlaneGeometry(150, 300), numMat36);
+    num36.rotation.set(-Math.PI / 2, 0, 0);
+    num36.position.set(-70, 0.17, runwayHalfL - 480);
+    num36.renderOrder = 13;
+    scene.add(num36);
+    const num18 = num36.clone();
+    num18.material = numMat18;
+    num18.rotation.set(-Math.PI / 2, 0, Math.PI);
+    num18.position.set(-70, 0.17, -runwayHalfL + 480);
+    scene.add(num18);
+
+    const appLightMat = new THREE.MeshBasicMaterial({ color: 0xffd9a0 });
+    const approachLights = new THREE.InstancedMesh(new THREE.SphereGeometry(5, 8, 8), appLightMat, 36);
+    let appLi = 0;
+    for (const endZ of [runwayHalfL + 300, -runwayHalfL - 300]) {
+      const sign = endZ > 0 ? 1 : -1;
+      for (let i = 0; i < 6; i++) {
+        const z = endZ + sign * i * 140;
+        for (const sx of [-1, 0, 1]) {
+          instanceDummy.position.set(sx * 45, 3, z);
+          instanceDummy.scale.set(1, 1, 1);
+          instanceDummy.rotation.set(0, 0, 0);
+          instanceDummy.updateMatrix();
+          approachLights.setMatrixAt(appLi++, instanceDummy.matrix);
+        }
+      }
+    }
+    approachLights.instanceMatrix.needsUpdate = true;
+    approachLights.frustumCulled = false;
+    scene.add(approachLights);
+
+    const runwayEdgeLightMat = new THREE.MeshBasicMaterial({ color: 0xfff6c9 });
+    const runwayEdgeLights = new THREE.InstancedMesh(new THREE.SphereGeometry(3.4, 8, 8), runwayEdgeLightMat, 44);
+    let edgeLi = 0;
+    for (let i = 0; i < 11; i++) {
+      const z = -runwayHalfL + i * (runwayLength / 10);
+      for (const sx of [-1, 1]) {
+        instanceDummy.position.set(sx * (runwayHalfW - 20), 1.6, z);
+        instanceDummy.scale.set(1, 1, 1);
+        instanceDummy.rotation.set(0, 0, 0);
+        instanceDummy.updateMatrix();
+        runwayEdgeLights.setMatrixAt(edgeLi++, instanceDummy.matrix);
+      }
+    }
+    runwayEdgeLights.instanceMatrix.needsUpdate = true;
+    runwayEdgeLights.frustumCulled = false;
+    scene.add(runwayEdgeLights);
+
+    // ===== Airport traffic: parked + taxiing + cruising aircraft =====
+    function buildSmallAirliner(scale) {
+      const g = new THREE.Group();
+      const bodyMat = new THREE.MeshLambertMaterial({ color: 0xf2f5f8 });
+      const wingMat = new THREE.MeshLambertMaterial({ color: 0x9fb3c4 });
+      const accentMat = new THREE.MeshLambertMaterial({ color: 0x2f73b7 });
+      const engMat = new THREE.MeshLambertMaterial({ color: 0x5b6b7a });
+      const fusGeo = new THREE.CylinderGeometry(1.15, 0.9, 16, 10);
+      fusGeo.rotateX(Math.PI / 2);
+      const fus = new THREE.Mesh(fusGeo, bodyMat);
+      g.add(fus);
+      const nose = new THREE.Mesh(new THREE.SphereGeometry(1.15, 10, 10), bodyMat);
+      nose.scale.set(1, 1, 0.7);
+      nose.position.z = -8.6;
+      g.add(nose);
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(1.05, 3.2, 8), accentMat);
+      cone.rotation.x = -Math.PI / 2;
+      cone.position.z = 8.8;
+      g.add(cone);
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(15, 0.16, 3.4), wingMat);
+      wing.position.y = 0.55;
+      g.add(wing);
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.6, 2.6), accentMat);
+      fin.position.set(0, 3.4, 6.2);
+      g.add(fin);
+      const tailWing = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.14, 2.2), wingMat);
+      tailWing.position.set(0, 1.8, 7.8);
+      g.add(tailWing);
+      for (const side of [-1, 1]) {
+        const eng = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.42, 2.4, 8), engMat);
+        eng.rotation.x = Math.PI / 2;
+        eng.position.set(side * 4.2, 0.25, -1.6);
+        g.add(eng);
+      }
+      g.scale.setScalar(scale);
+      return g;
+    }
+
+    const parked1 = buildSmallAirliner(1);
+    parked1.position.set(-760, 0.4, 1600);
+    parked1.rotation.y = Math.PI / 2;
+    scene.add(parked1);
+    const parked2 = buildSmallAirliner(1);
+    parked2.position.set(760, 0.4, -1600);
+    parked2.rotation.y = -Math.PI / 2;
+    scene.add(parked2);
+    const parked3 = buildSmallAirliner(0.85);
+    parked3.position.set(-760, 0.4, -2200);
+    parked3.rotation.y = Math.PI / 2;
+    scene.add(parked3);
+
+    const aiPlanes = [];
+    function createTaxiAircraft(x, z, dir) {
+      const mesh = buildSmallAirliner(0.95);
+      mesh.position.set(x, 0.4, z);
+      mesh.rotation.y = dir > 0 ? Math.PI : 0;
+      scene.add(mesh);
+      aiPlanes.push({
+        mesh,
+        type: 'taxi',
+        speed: 50 + Math.random() * 40,
+        zMin: -3800,
+        zMax: 3800,
+        dir,
+        stopTimer: 0
+      });
+    }
+    createTaxiAircraft(-560, -3200, 1);
+    createTaxiAircraft(560, 2400, -1);
+    createTaxiAircraft(-560, 1000, 1);
+
+    function createCruiseAircraft(y, z, dir) {
+      const mesh = buildSmallAirliner(1.5);
+      mesh.position.set(dir > 0 ? -28000 : 28000, y, z);
+      mesh.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+      scene.add(mesh);
+      aiPlanes.push({ mesh, type: 'cruise', speed: 200, dir });
+    }
+    createCruiseAircraft(420, -9000, 1);
+    createCruiseAircraft(620, 6000, -1);
+
+    function updateAIPlanes(dt) {
+      for (let i = 0; i < aiPlanes.length; i++) {
+        const ap = aiPlanes[i];
+        if (ap.type === 'taxi') {
+          if (ap.stopTimer > 0) {
+            ap.stopTimer -= dt;
+            continue;
+          }
+          ap.mesh.position.z += ap.dir * ap.speed * dt;
+          if (ap.mesh.position.z > ap.zMax) {
+            ap.dir = -1;
+            ap.mesh.rotation.y = 0;
+            ap.stopTimer = 1.5 + Math.random() * 2;
+          } else if (ap.mesh.position.z < ap.zMin) {
+            ap.dir = 1;
+            ap.mesh.rotation.y = Math.PI;
+            ap.stopTimer = 1.5 + Math.random() * 2;
+          }
+        } else {
+          ap.mesh.position.x += ap.dir * ap.speed * dt;
+          if (ap.mesh.position.x > 28000) {
+            ap.dir = -1;
+            ap.mesh.rotation.y = -Math.PI / 2;
+          } else if (ap.mesh.position.x < -28000) {
+            ap.dir = 1;
+            ap.mesh.rotation.y = Math.PI / 2;
+          }
+        }
+      }
+    }
+
+    function checkAICollision() {
+      if (crashState.active || !gameStarted) return;
+      for (let i = 0; i < aiPlanes.length; i++) {
+        const ap = aiPlanes[i];
+        const dx = planeGroup.position.x - ap.mesh.position.x;
+        const dz = planeGroup.position.z - ap.mesh.position.z;
+        const dy = planeGroup.position.y - ap.mesh.position.y;
+        if (Math.hypot(dx, dz) < 24 && Math.abs(dy) < 14) {
+          triggerCrash(ap.type === 'taxi' ? '撞上滑行中的飞机' : '空中撞上客机，飞机解体了');
+          return;
+        }
+      }
+    }
 
     // Control state
     let speed = 0;
@@ -2099,6 +2612,8 @@ window.startGame();
         }
       }
 
+      updateAIPlanes(dt);
+
       if (gameStarted) {
         const prevPlaneY = planeGroup.position.y;
         const pitchInputUp = -joyY;
@@ -2179,6 +2694,8 @@ window.startGame();
             pitch = Math.min(0, pitch);
           }
         }
+
+        checkAICollision();
 
         if (crashState.active) {
           verticalSpeed = 0;
@@ -2359,6 +2876,13 @@ window.startGame();
           shake: Number(crashFx.shake.toFixed(2)),
           explosionCount: crashExplosionBursts.length
         },
+        aiPlanes: aiPlanes.map((ap) => ({
+          type: ap.type,
+          x: Number(ap.mesh.position.x.toFixed(1)),
+          y: Number(ap.mesh.position.y.toFixed(1)),
+          z: Number(ap.mesh.position.z.toFixed(1)),
+          dir: ap.dir
+        })),
         modelLoading: {
           pendingPlaneKey: selectedPlaneKey,
           loading: planeLoading,
